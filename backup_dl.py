@@ -711,13 +711,13 @@ from numpy.typing import NDArray
 from s2cloudless import S2PixelCloudDetector
 
 from data.apo_dataloader import CIRCA_from_HDF5
-from data.process_functions import (
+from data.utils.process_functions import (
     S1_LAUNCH,
     get_cloud_map,
     process_MS,
     process_SAR,
 )
-from data.sampling_functions import sampler
+from data.utils.sampling_functions import sampler
 
 SEN12MSCRTS_SEQ_LENGTH: int = 30  # Length of the Sentinel time series
 CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free

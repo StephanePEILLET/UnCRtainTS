@@ -33,7 +33,7 @@ ChannelType = Literal["all", "bgr-nir"]
 
 def str2date(date_string: str) -> dt.date:
     """
-    Convert a date string in format 'YYYYMMDD' to datetime.date object.
+    Convert a date string in format 'YYYYMMDD' to datetime object.
 
     Args:
         date_string: Date string in format 'YYYYMMDD'
@@ -319,5 +319,6 @@ if __name__ == "__main__":
         shuffle=False,
         channels="all",
     )
+
     sample = next(iter(dataset))
     print(sample.keys())
