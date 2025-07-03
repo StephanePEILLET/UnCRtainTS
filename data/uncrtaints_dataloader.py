@@ -185,7 +185,7 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
         else:
             masks = patch_data["S2"]["cloud_prob"][patch_data["idx_good_frames"]]
 
-        coverage: List[float] = [np.mean(mask) for mask in masks]
+        coverage: List[float] = masks.mean(dim=(1, 2, 3)).tolist()
 
         # Process and normalize data
         s1 = np.asarray([process_SAR(img, self.method) for img in s1])
@@ -205,7 +205,16 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
             inputs_idx: NDArray
             cloudless_idx: NDArray
             coverage_match: bool
-            inputs_idx, cloudless_idx, coverage_match = sampler(self.sampling, self.t_windows, self.n_input_t, self.min_cov, self.max_cov, coverage, clear_tresh=CLEAR_THRESHOLD)
+            t_windows: int = len(coverage)
+            inputs_idx, cloudless_idx, coverage_match = sampler(
+                self.sampling,
+                t_windows,
+                self.n_input_t,
+                self.min_cov,
+                self.max_cov,
+                coverage,
+                clear_tresh=CLEAR_THRESHOLD,
+            )
 
             # Prepare input and target data
             input_s1: NDArray = s1[inputs_idx]
@@ -220,7 +229,7 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
                     "S1": list(input_s1),
                     "S2": input_s2,
                     "masks": list(input_masks),
-                    "coverage": [np.mean(mask) for mask in input_masks],
+                    "coverage": input_masks.mean(dim=(1, 2, 3)).tolist(),
                     "S1 TD": [s1_td[idx] for idx in inputs_idx],
                     "S2 TD": [s2_td[idx] for idx in inputs_idx],
                     "idx": inputs_idx,
@@ -229,7 +238,7 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
                     "S1": [target_s1],
                     "S2": target_s2,
                     "masks": [target_mask],
-                    "coverage": [np.mean(target_mask)],
+                    "coverage": target_mask.mean(dim=(1, 2)).tolist(),
                     "S1 TD": [s1_td[cloudless_idx]],
                     "S2 TD": [s2_td[cloudless_idx]],
                     "idx": cloudless_idx,
