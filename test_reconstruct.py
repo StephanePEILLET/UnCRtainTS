@@ -28,7 +28,7 @@ from train_reconstruct import (
     seed_packages,
 )
 
-from data.uncrtaints_dataloader import UnCRtainTS_from_hdf5
+from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
 
 parser = create_parser(mode="test")
 test_config = parser.parse_args()
@@ -109,7 +109,7 @@ def main(config):
     print(model)
 
     imported_path = None if any((config.min_cov != 0, config.max_cov != 1)) else import_from_path("test", config)
-    dt_test = UnCRtainTS_from_hdf5(
+    dt_test = UnCRtainTS_CIRCA_Adapter(
         os.path.expanduser(config.root2),
         split="test",
         region=config.region,

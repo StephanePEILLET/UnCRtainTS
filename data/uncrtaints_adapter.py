@@ -1,14 +1,23 @@
-import sys
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).parents[1]))
 # s2cloudless: see https://github.com/sentinel-hub/sentinel2-cloud-detector
 import os
+from pathlib import Path
 from typing import Dict, List, Literal, Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
 from pyproj.datadir import get_data_dir
+
+# Maintenant importer s2cloudless
+from s2cloudless import S2PixelCloudDetector
+
+from data.circa_dataloader import CIRCA_from_HDF5
+from data.utils.process_functions import (
+    S1_LAUNCH,
+    get_cloud_map,
+    process_MS,
+    process_SAR,
+)
+from data.utils.sampling_functions import sampler
 
 # Vérifie et configure le chemin PROJ_DATA
 try:
@@ -27,18 +36,6 @@ except Exception:
         if os.path.exists(proj_data):
             os.environ["PROJ_LIB"] = proj_data
 
-# Maintenant importer s2cloudless
-from s2cloudless import S2PixelCloudDetector
-
-from data.circa_dataloader import CIRCA_from_HDF5
-from data.utils.process_functions import (
-    S1_LAUNCH,
-    get_cloud_map,
-    process_MS,
-    process_SAR,
-)
-from data.utils.sampling_functions import sampler
-
 SEN12MSCRTS_SEQ_LENGTH: int = 30  # Length of the Sentinel time series
 CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
 
@@ -49,7 +46,7 @@ RescaleMethod = Literal["default", "minmax", "standard"]
 SamplerType = Literal["fixed", "random", "stratified"]
 
 
-class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
+class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
     """
     A dataset class for loading and processing Sentinel-1 and Sentinel-2 time series data from HDF5 files,
     with cloud masking and temporal sampling capabilities.
@@ -226,18 +223,18 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
 
             return {
                 "input": {
-                    "S1": list(input_s1),
+                    "S1": input_s1,
                     "S2": input_s2,
-                    "masks": list(input_masks),
+                    "masks": input_masks,
                     "coverage": input_masks.mean(dim=(1, 2, 3)).tolist(),
                     "S1 TD": [s1_td[idx] for idx in inputs_idx],
                     "S2 TD": [s2_td[idx] for idx in inputs_idx],
                     "idx": inputs_idx,
                 },
                 "target": {
-                    "S1": [target_s1],
+                    "S1": target_s1,
                     "S2": target_s2,
-                    "masks": [target_mask],
+                    "masks": target_mask,
                     "coverage": target_mask.mean(dim=(1, 2)).tolist(),
                     "S1 TD": [s1_td[cloudless_idx]],
                     "S2 TD": [s2_td[cloudless_idx]],
@@ -247,17 +244,18 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
             }
 
 
-if __name__ == "__main__":
-    # Example usage
-    path_dataset_circa = Path("/home/SPeillet/Downloads/data")
-    hdf5_file = path_dataset_circa / "circa_cloud_removal.hdf5"
+# if __name__ == "__main__":
+#     # Example usage
+#     path_dataset_circa = Path("/home/SPeillet/Downloads/data")
+#     hdf5_file = path_dataset_circa / "circa_cloud_removal.hdf5"
 
-    # Import data from HDF5 file
-    dataset = UnCRtainTS_from_hdf5(
-        hdf5_file=hdf5_file,
-        phase="all",
-        shuffle=False,
-        channels="all",
-    )
-    sample = next(iter(dataset))
-    print(sample.keys())
+#     # Import data from HDF5 file
+#     dataset = UnCRtainTS_CIRCA_Adapter(
+#         hdf5_file=hdf5_file,
+#         phase="all",
+#         shuffle=False,
+#         channels="all",
+#     )
+
+#     sample = next(iter(dataset))
+#     print(sample.keys())

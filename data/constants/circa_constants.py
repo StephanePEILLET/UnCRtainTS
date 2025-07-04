@@ -1,3 +1,6 @@
+S2_BANDS = 10
+S1_BANDS = 4
+
 MGRSC_SPLITS = {
     "train": [
         "MGRS25-31TDH_row-2_col-4",

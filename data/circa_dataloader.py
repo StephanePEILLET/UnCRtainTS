@@ -1,9 +1,5 @@
 import datetime as dt
-import sys
 from pathlib import Path
-
-sys.path.append(str(Path(__file__).parents[1]))
-
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import h5py
@@ -13,7 +9,7 @@ import torch
 from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
-from data.constants.circa_splits_constants import MGRSC_SPLITS
+from data.constants.circa_constants import MGRSC_SPLITS, S1_BANDS, S2_BANDS
 
 # Set multiprocessing sharing strategy
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -97,6 +93,9 @@ class CIRCA_from_HDF5(Dataset):
         self.hdf5_file: h5py.File
         self.patches_dataset: pd.DataFrame
         self.hdf5_file, self.patches_dataset = self.setup_hdf5_file(hdf5_file)
+        self.S2_BANDS = S2_BANDS
+        if self.include_S1:
+            self.S1_BANDS = S1_BANDS
 
         # Channel configuration
         self.num_channels: int

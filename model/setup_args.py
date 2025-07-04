@@ -1,6 +1,71 @@
 import argparse
+import json
+import os
 
-S2_BANDS = 13
+from data.constants.circa_constants import S2_BANDS
+from model.src import utils
+
+
+def setup_config(parser, list_args=["encoder_widths", "decoder_widths", "out_conv"]):
+    config = utils.str2list(parser.parse_args(), list_args=list_args)
+    if config.model in ["unet", "utae"]:
+        assert len(config.encoder_widths) == len(config.decoder_widths)
+        config.loss = "l2"
+        if config.model == "unet":
+            # train U-Net from scratch
+            config.pretrain = True
+            config.trained_checkp = ""
+    if config.pretrain:  # pre-training is on a single time point
+        config.input_t = config.n_head = 1
+        config.sample_type = "pretrain"
+        if config.model == "unet":
+            config.batch_size = 32
+        config.positional_encoding = False
+    if config.loss in ["GNLL", "MGNLL"]:
+        # for univariate losses, default to univariate mode (batched across channels)
+        if config.loss in ["GNLL"]:
+            config.covmode = "uni"
+        if config.covmode == "iso":
+            config.out_conv[-1] += 1
+        elif config.covmode in ["uni", "diag"]:
+            config.out_conv[-1] += S2_BANDS
+            config.var_nonLinearity = "softplus"
+    # grab the PID so we can look it up in the logged config for server-side process management
+    config.pid = os.getpid()
+    # import & re-load a previous configuration, e.g. to resume training
+    if config.resume_from:
+        load_conf = os.path.join(config.res_dir, config.experiment_name, "conf.json")
+        if config.experiment_name != config.trained_checkp.split("/")[-2]:
+            raise ValueError("Mismatch of loaded config file and checkpoints")
+        with open(load_conf) as f:
+            t_args = argparse.Namespace()
+            # do not overwrite the following flags by their respective values in the config file
+            no_overwrite = [
+                "pid",
+                "num_workers",
+                "root1",
+                "root2",
+                "root3",
+                "resume_from",
+                "trained_checkp",
+                "epochs",
+                "encoder_widths",
+                "decoder_widths",
+                "lr",
+            ]
+            conf_dict = {key: val for key, val in json.load(f).items() if key not in no_overwrite}
+            for key, val in vars(config).items():
+                if key in no_overwrite:
+                    conf_dict[key] = val
+            t_args.__dict__.update(conf_dict)
+            config = parser.parse_args(namespace=t_args)
+    config = utils.str2list(config, list_args=["encoder_widths", "decoder_widths", "out_conv"])
+
+    # resume at a specified epoch and update optimizer accordingly
+    if config.resume_at >= 0:
+        config.lr = config.lr * config.gamma**config.resume_at
+
+    return config
 
 
 def create_parser(mode="train"):
@@ -126,12 +191,8 @@ def create_parser(mode="train"):
     parser.add_argument("--pad_value", default=0, type=float)
 
     # attention-specific parameters
-    parser.add_argument(
-        "--n_head", default=16, type=int, help="default value of 16, 4 for debugging"
-    )
-    parser.add_argument(
-        "--d_model", default=256, type=int, help="layers in L-TAE, default value of 256"
-    )
+    parser.add_argument("--n_head", default=16, type=int, help="default value of 16, 4 for debugging")
+    parser.add_argument("--d_model", default=256, type=int, help="layers in L-TAE, default value of 256")
     parser.add_argument(
         "--positional_encoding",
         dest="positional_encoding",
@@ -139,9 +200,7 @@ def create_parser(mode="train"):
         help="whether to use positional encoding or not",
     )
     parser.add_argument("--d_k", default=4, type=int)
-    parser.add_argument(
-        "--low_res_size", default=32, type=int, help="resolution to downsample to"
-    )
+    parser.add_argument("--low_res_size", default=32, type=int, help="resolution to downsample to")
     parser.add_argument(
         "--use_v",
         dest="use_v",
@@ -150,9 +209,7 @@ def create_parser(mode="train"):
     )
 
     # set-up parameters
-    parser.add_argument(
-        "--num_workers", default=0, type=int, help="Number of data loading workers"
-    )
+    parser.add_argument("--num_workers", default=0, type=int, help="Number of data loading workers")
     parser.add_argument("--rdm_seed", default=1, type=int, help="Random seed")
     parser.add_argument(
         "--device",
@@ -186,18 +243,14 @@ def create_parser(mode="train"):
         type=int,
         help="When to unfreeze ALL weights for training",
     )
-    parser.add_argument(
-        "--epochs", default=20, type=int, help="Number of epochs to train"
-    )
+    parser.add_argument("--epochs", default=20, type=int, help="Number of epochs to train")
     parser.add_argument("--batch_size", default=4, type=int, help="Batch size")
     parser.add_argument(
         "--chunk_size",
         type=int,
         help="Size of vmap batches, this can be adjusted to accommodate for additional memory needs",
     )
-    parser.add_argument(
-        "--lr", default=1e-2, type=float, help="Learning rate, e.g. 0.01"
-    )
+    parser.add_argument("--lr", default=1e-2, type=float, help="Learning rate, e.g. 0.01")
     parser.add_argument(
         "--gamma",
         default=1.0,
@@ -354,8 +407,6 @@ def create_parser(mode="train"):
         action="store_true",
         help="whether to test on individually specified patches or not",
     )
-    parser.add_argument(
-        "--load_config", default="", type=str, help="path of conf.json file to load"
-    )
+    parser.add_argument("--load_config", default="", type=str, help="path of conf.json file to load")
 
     return parser

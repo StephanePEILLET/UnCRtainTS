@@ -25,7 +25,7 @@ from train_reconstruct import (
     save_results,
 )
 
-from data.uncrtaints_dataloader import UnCRtainTS_from_hdf5
+from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
 
 epoch = 1
 root = "/home/data/"  # path to directory containing dataset
@@ -97,7 +97,7 @@ def main():
         f"generic_{in_time}_{mode}_{region}_s2cloudless_mask.npy",
     )
     import_data_path = import_data_path if os.path.isfile(import_data_path) else None
-    dt_test = UnCRtainTS_from_hdf5(
+    dt_test = UnCRtainTS_CIRCA_Adapter(
         os.path.join(root, "SEN12MSCRTS"),
         split=mode,
         region=region,
@@ -127,7 +127,7 @@ def main():
                 if not os.path.isfile(os.path.join(path, os.path.basename(sample_var))):
                     sample_var = sample_mean.replace("_pred", "_var")
                 var.append(np.load(os.path.join(path, os.path.basename(sample_var))))
-        except:
+        except Exception:
             # skip any sample for which not all members provide predictions
             # (note: we also next'ed the dataloader's sample already)
             print(f"Skipped sample {idx}, missing data.")
