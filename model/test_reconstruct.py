@@ -17,6 +17,8 @@ from parse_args import create_parser
 dirname = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(dirname))
 
+os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
+
 from src import utils
 from src.model_utils import get_model, load_checkpoint
 from torch.utils.tensorboard import SummaryWriter
@@ -118,6 +120,7 @@ def main(config):
     test_loader = torch.utils.data.DataLoader(dt_test, batch_size=config.batch_size, shuffle=False)
 
     # Load weights
+    print('WEIGHT', config.weight_folder)
     ckpt_n = f"_epoch_{config.resume_at}" if config.resume_at > 0 else ""
     load_checkpoint(config, config.weight_folder, model, f"model{ckpt_n}")
 
@@ -135,6 +138,7 @@ def main(config):
         device=device,
     )
     print(f"\nTest image metrics: {test_img_metrics}")
+    print('ALLEZ COURAGE ON Y PRESQUE !')
 
     save_results(
         test_img_metrics,
@@ -142,6 +146,7 @@ def main(config):
         split="test",
     )
     print(f"\nLogged test metrics to path {os.path.join(config.res_dir, config.experiment_name)}")
+    print('YOUYOUYOOOOOOUUUUU !!!! :sparkle:')
 
 
 if __name__ == "__main__":

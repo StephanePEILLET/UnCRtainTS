@@ -223,6 +223,8 @@ def load_checkpoint(config, checkp_dir, model, name):
         #   in_block1 -> in_block0, out_block1 -> out_block0
         checkpoint_renamed = dict()
         for key, val in checkpoint.items():
+            if key=='netG.in_conv.conv.conv.0.weight':
+                val = val[:,:14,:,:]
             if "in_block" in key or "out_block" in key:
                 strs = key.split(".")
                 strs[1] = strs[1][:-1] + str(int(strs[1][-1]) - 1)
@@ -230,6 +232,8 @@ def load_checkpoint(config, checkp_dir, model, name):
                 key = ".".join(strs)
             checkpoint_renamed[key] = val
         model.load_state_dict(checkpoint_renamed, strict=False)
+
+        #size mismatch for netG.in_conv.conv.conv.0.weight: copying a param with shape torch.Size([64, 15, 1, 1]) from checkpoint, the shape in current model is torch.Size([64, 14, 1, 1]).
 
 
 def freeze_layers(net, apply_to=None, grad=False):

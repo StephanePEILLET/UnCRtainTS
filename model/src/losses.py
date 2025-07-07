@@ -8,7 +8,7 @@ from torch import nn, vmap
 from torch.nn.modules.loss import _Loss
 from torch.overrides import handle_torch_function, has_torch_function_variadic
 
-S2_BANDS = 13
+S2_BANDS = 10
 
 
 def get_loss(config):
@@ -50,6 +50,8 @@ def get_loss(config):
 
 
 def calc_loss(criterion, config, out, y, var=None):
+    out = out.squeeze(1)
+    out = out[:,1:11,:,:] #adapter a nos donnees [B,10,H,W]
     if config.loss in ["GNLL"]:
         loss, variance = criterion(out, y, var)
     elif config.loss in ["MGNLL"]:

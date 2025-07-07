@@ -37,7 +37,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from data.uncrtaints_dataloader import UnCRtainTS_from_hdf5
 
-S2_BANDS = 13
+S2_BANDS = 10
 parser = create_parser(mode="train")
 config = utils.str2list(parser.parse_args(), list_args=["encoder_widths", "decoder_widths", "out_conv"])
 
@@ -115,6 +115,7 @@ def seed_packages(seed):
     os.environ["PYTHONHASHSEED"] = str(seed)
     torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = False
 
 
 def seed_worker(worker_id):
@@ -219,7 +220,6 @@ def prepare_data_multi(batch, device, config):
         x = torch.stack(in_S2, dim=1)
         dates = torch.tensor(in_S2_td).float().to(device)
 
-    print("x", x.shape, "y", y.shape, "in_m", in_m.shape, "dates", dates.shape)
     return x, y, in_m, dates
 
 
@@ -379,7 +379,7 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
                     model.netG.variance = None
                 else:
                     var = out[:, :, S2_BANDS:, ...]
-                out = out[:, :, :S2_BANDS, ...]
+                out = out[:, :, :S2_BANDS, ...] #recupere les 10 bandes S2
                 batch_size = y.size()[0]
 
                 for bdx in range(batch_size):
@@ -516,7 +516,6 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
         # log image metrics
         for key, val in img_meter.value().items():
             writer.add_scalar(f"{mode}/{key}", val, step)
-
         # any loss is currently only computed within model.backward_G() at train time
         writer.add_scalar(f"{mode}/loss", metrics[f"{mode}_loss"], step)
 

@@ -86,6 +86,7 @@ class BaseModel(nn.Module):
                 var=self.fake_B[:, :, self.netG.mean_idx : self.netG.vars_idx, ...],
             )
         else:  # used with all other models
+            
             self.loss_G, self.netG.variance = losses.calc_loss(
                 self.criterion,
                 self.config,

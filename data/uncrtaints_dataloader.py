@@ -214,7 +214,6 @@ class UnCRtainTS_from_hdf5(CIRCA_from_HDF5):
             target_s2: NDArray = s2[cloudless_idx]
             target_mask: NDArray = masks[cloudless_idx]
 
-            #print(t.shape)
             return {
                 "input": {
                     "S1": input_s1,

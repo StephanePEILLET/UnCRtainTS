@@ -101,14 +101,20 @@ class LTAE2d(nn.Module):
 
         if self.inconv is not None:
             out = self.inconv(out.permute(0, 2, 1)).permute(0, 2, 1)
-
         if self.positional_encoder is not None:
+            bp = (
+                batch_positions.unsqueeze(-1)
+                .repeat((4,3, 32, 32))
+            )
+            """
             bp = (
                 batch_positions.unsqueeze(-1)
                 .repeat((1, 1, h))
                 .unsqueeze(-1)
                 .repeat((1, 1, 1, w))
+                .repeat((3, 1, 1, 1))
             )  # BxTxHxW
+            """
             bp = bp.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
             out = out + self.positional_encoder(bp)
 
@@ -265,7 +271,7 @@ class MultiHeadAttention(nn.Module):
         q = torch.stack([self.Q for _ in range(sz_b)], dim=1).view(
             -1, d_k
         )  # (n*b) x d_k
-
+        v = v.type(torch.float32)
         k = self.fc1_k(v).view(sz_b, seq_len, n_head, d_k)
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, seq_len, d_k)  # (n*b) x lk x dk
 

@@ -540,7 +540,6 @@ class ConvLayer(nn.Module):
         self.conv = nn.Sequential(*layers)
 
     def forward(self, input):
-        print('CONV', input.shape)
         return self.conv(input)
 
 

@@ -25,6 +25,7 @@ class Metric:
 
 
 def img_metrics(target, pred, var=None, pixelwise=True):
+    pred = pred.squeeze(0)
     rmse = torch.sqrt(torch.mean(torch.square(target - pred)))
     psnr = 20 * torch.log10(1 / rmse)
     mae = torch.mean(torch.abs(target - pred))
