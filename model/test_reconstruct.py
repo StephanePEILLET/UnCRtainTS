@@ -138,8 +138,6 @@ def main(config):
         device=device,
     )
     print(f"\nTest image metrics: {test_img_metrics}")
-    print('ALLEZ COURAGE ON Y PRESQUE !')
-
     save_results(
         test_img_metrics,
         os.path.join(config.res_dir, config.experiment_name),

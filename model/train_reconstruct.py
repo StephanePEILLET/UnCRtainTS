@@ -296,7 +296,7 @@ def log_train(writer, config, model, step, x, out, y, in_m, name="", var=None):
     else:
         writer.add_image(f"Img/train/{name}in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW")
     writer.add_image(f"Img/train/{name}out", out[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-    writer.add_image(f"Img/train/{name}y", y[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
+    writer.add_image(f"Img/train/{name}y", y[0, [3, 2, 1], ...], step, dataformats="CHW") #pour avoir 3,256,256
     writer.add_image(f"Img/train/{name}m", in_m[0, :, None, ...], step, dataformats="NCHW")
 
     # analyse cloud coverage
@@ -526,8 +526,8 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
         else:
             writer.add_image(f"Img/{mode}/in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW")
         writer.add_image(f"Img/{mode}/out", out[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-        writer.add_image(f"Img/{mode}/y", y[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-        writer.add_image(f"Img/{mode}/m", in_m[0, :, None, ...], step, dataformats="NCHW")
+        writer.add_image(f"Img/{mode}/y", y[0, [3, 2, 1], ...], step, dataformats="CHW") #pour avoir [3, 256, 256]
+        writer.add_image(f"Img/{mode}/m", in_m[0, :, ...], step, dataformats="NCHW") #pour avoir [3, 1, 256, 256]
 
         # compute Expected Calibration Error (ECE)
         if config.loss in ["GNLL", "MGNLL"]:

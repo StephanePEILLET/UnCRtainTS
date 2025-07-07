@@ -6,11 +6,16 @@ x = torch.zeros([4, 3, 14, 256, 256])
 x = x[0, :, [3, 2, 1], ...]
 print(x.shape)
 y = torch.zeros([4, 10, 256, 256])
-y = y[0, 0, [3, 2, 1], ...]
+y = y[0, [3, 2, 1], ...]
 print(y.shape)
 out= torch.zeros([4, 1, 10, 256, 256])
 out = out[0, 0, [3, 2, 1], ...]
 print(out.shape)
+in_m = torch.zeros([4, 3, 1, 256, 256])
+print('titi', in_m[0, :, ...].shape)
+in_m = in_m.squeeze(2)
+print(in_m.shape)
+
 
 
 """
