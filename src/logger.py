@@ -77,7 +77,7 @@ def log_train(writer, config, model, step, x, out, y, in_m, name="", var=None):
     writer.add_scalar(f"train/{name}{config.loss}", loss, step)
     writer.add_scalar(f"train/{name}total", loss, step)
     # use add_images for batch-wise adding across temporal dimension
-    if config.use_sar:
+    if config.data.use_sar:
         writer.add_image(f"Img/train/{name}in_s1", x[0, :, [0], ...], step, dataformats="NCHW")
         writer.add_image(f"Img/train/{name}in_s2", x[0, :, [5, 4, 3], ...], step, dataformats="NCHW")
     else:

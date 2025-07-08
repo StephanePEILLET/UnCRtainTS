@@ -34,7 +34,7 @@ def prepare_data(batch, device, config):
 
 def prepare_data_mono(batch, device, config):
     x = batch["input"]["S2"].to(device).unsqueeze(1)
-    if config.use_sar:
+    if config.data.use_sar:
         x = torch.cat((batch["input"]["S1"].to(device).unsqueeze(1), x), dim=2)
     m = batch["input"]["masks"].to(device).unsqueeze(1)
     y = batch["target"]["S2"].to(device).unsqueeze(1)

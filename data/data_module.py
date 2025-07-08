@@ -100,7 +100,7 @@ class UnCRtainTS_datamodule:
 
     def collate_fn_mono(self, batch):
         x = batch["input"]["S2"].to(self.device).unsqueeze(1)
-        if self.config.use_sar:
+        if self.config.data.use_sar:
             x = torch.cat((batch["input"]["S1"].to(self.device).unsqueeze(1), x), dim=2)
         m = batch["input"]["masks"].to(self.device).unsqueeze(1)
         y = batch["target"]["S2"].to(self.device).unsqueeze(1)
@@ -139,7 +139,7 @@ class UnCRtainTS_datamodule:
         target_S2 = recursive_todevice(batch["target"]["S2"], self.device)
         y = target_S2  # torch.cat(target_S2, dim=0).unsqueeze(1)
 
-        if self.config.use_sar:
+        if self.config.data.use_sar:
             in_S1 = recursive_todevice(batch["input"]["S1"], self.device)
             in_S1_td = recursive_todevice(batch["input"]["S1 TD"], self.device)
             if self.config.batch_size > 1:
