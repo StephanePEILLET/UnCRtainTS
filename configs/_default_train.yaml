@@ -11,7 +11,7 @@ data:
     cloud_masks: "s2cloudless_mask"                # Type of cloud mask to use [cloud_cloudshadow_mask | s2cloudless_map | s2cloudless_mask]
     sample_type: "cloudy_cloudfree"                # Sampling strategy ('generic' or 'cloudy_cloudfree')
     sampler: "fixed"                               # Sampler type ('fixed', 'random', or 'stratified')
-    n_input_samples: 3                             # Number of input samples to use
+    n_input_samples: 4                             # Number of input samples to use
     rescale_method: "default"                      # Method for rescaling data ('default', 'minmax', or 'standard')
     min_cov: 0.0                                   # Minimum cloud coverage threshold (0-1)
     max_cov: 1.0                                   # Maximum cloud coverage threshold (0-1)
@@ -52,7 +52,7 @@ loss: MGNLL                           # Image reconstruction loss to utilize [l1
 resume_from: false                    # Resume training acc. to JSON in --experiment_name and *.pth chckp in --trained_checkp
 unfreeze_after: 0                     # When to unfreeze ALL weights for training
 epochs: 20                            # Number of epochs to train
-batch_size: 1                         # Batch size
+batch_size: 4                         # Batch size
 chunk_size: null                      # Size of vmap batches, this can be adjusted to accommodate for additional memory needs
 lr:  0.01                             # Learning rate, e.g. 0.01
 gamma: 1.0                            # Learning rate decay parameter for scheduler
