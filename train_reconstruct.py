@@ -6,6 +6,7 @@ import torch
 from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 
+from data.constants.circa_constants import S2_BANDS
 from data.data_module import UnCRtainTS_datamodule
 from src.cli import parse_config
 from src.logger import (
@@ -126,7 +127,7 @@ def main():
             data_loader=dl_train,
             config=config,
             writer=writer,
-            s2_bands=dm.dt_train.s2_channels,
+            s2_bands=S2_BANDS,
             mode="train",
             epoch=epoch,
             device=device,
@@ -144,7 +145,7 @@ def main():
                 data_loader=dl_val,
                 config=config,
                 writer=writer,
-                s2_bands=dm.dt_val.s2_channels,
+                s2_bands=S2_BANDS,
                 mode="val",
                 epoch=epoch,
                 device=device,
@@ -193,7 +194,7 @@ def main():
         data_loader=dl_test,
         config=config,
         writer=writer,
-        s2_bands=dm.dt_test.s2_channels,
+        s2_bands=S2_BANDS,
         mode="test",
         epoch=epoch,
         device=device,

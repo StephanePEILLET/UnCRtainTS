@@ -6,6 +6,7 @@ import torchnet as tnt
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
+from data.constants.circa_constants import S2_BANDS
 from src.logger import (
     export,
     log_aleatoric,
@@ -70,7 +71,7 @@ def iterate(
     data_loader,
     config,
     writer,
-    s2_bands,
+    s2_bands=S2_BANDS,
     mode="train",
     epoch=None,
     device=None,
@@ -104,8 +105,8 @@ def iterate(
                     var = model.netG.variance
                     model.netG.variance = None
                 else:
-                    var = out[:, :, s2_bands:, ...]
-                out = out[:, :, :s2_bands, ...]
+                    var = out[:, :, S2_BANDS:, ...]
+                out = out[:, :, :S2_BANDS, ...]
                 batch_size = y.size()[0]
 
                 for bdx in range(batch_size):
@@ -186,8 +187,8 @@ def iterate(
             if hasattr(model.netG, "variance") and model.netG.variance is not None:
                 var = model.netG.variance.cpu()
             else:
-                var = out[:, :, s2_bands:, ...]
-            out = out[:, :, :s2_bands, ...]
+                var = out[:, :, S2_BANDS:, ...]
+            out = out[:, :, :S2_BANDS, ...]
 
             if config.plot_every > 0:
                 plot_out = out.detach().clone()
