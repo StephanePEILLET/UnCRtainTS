@@ -48,11 +48,11 @@ separate_out: false                  # whether to separately process mean and va
 
 # Training parameters
 
-loss: MGNLL                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
+loss: l2                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
 resume_from: false                    # Resume training acc. to JSON in --experiment_name and *.pth chckp in --trained_checkp
 unfreeze_after: 0                     # When to unfreeze ALL weights for training
 epochs: 20                            # Number of epochs to train
-batch_size: 4                         # Batch size
+batch_size: 2                         # Batch size
 chunk_size: null                      # Size of vmap batches, this can be adjusted to accommodate for additional memory needs
 lr:  0.01                             # Learning rate, e.g. 0.01
 gamma: 1.0                            # Learning rate decay parameter for scheduler
