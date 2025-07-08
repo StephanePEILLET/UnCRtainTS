@@ -12,14 +12,14 @@ import pprint
 import sys
 
 import torch
-from parse_args import create_parser
+from torch.utils.tensorboard import SummaryWriter
 
-dirname = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(dirname))
-
+from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
 from src import utils
 from src.model_utils import get_model, load_checkpoint
-from torch.utils.tensorboard import SummaryWriter
+from src.cli import parse_config
+from src.trainer import iterate
+from src.utils_training import seed_packages
 from train_reconstruct import (
     import_from_path,
     iterate,
@@ -27,14 +27,13 @@ from train_reconstruct import (
     save_results,
     seed_packages,
 )
+from utils_misc import config_utils
 
-from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
-
-parser = create_parser(mode="test")
-test_config = parser.parse_args()
-
+test_config = parse_config(mode="test")
 # grab the PID so we can look it up in the logged config for server-side process management
 test_config.pid = os.getpid()
+config_utils.print_config_rich(test_config)
+
 
 # related to flag --use_custom:
 # define custom target S2 patches (these will be mosaiced into a single sample), and fetch associated target S1 patches as well as input data
@@ -44,7 +43,7 @@ targ_s2 = [f"ROIs1868/73/S2/14/s2_ROIs1868_73_ImgNo_14_2018-06-21_patch_{pdx}.ti
 # load previous config from training directories
 
 # if no custom path to config file is passed, try fetching config file at default location
-conf_path = os.path.join(dirname, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
+conf_path = os.path.join(test_config.res_dir, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if os.path.isfile(conf_path):
     with open(conf_path) as file:
         model_config = json.loads(file.read())
@@ -117,7 +116,6 @@ def main(config):
         n_input_samples=config.input_t,
         import_data_path=imported_path,
         sampler="fixed",
-        custom_samples=None if not config.use_custom else custom,
     )
 
     dt_test = torch.utils.data.Subset(dt_test, range(0, min(config.max_samples_count, len(dt_test))))

@@ -1,14 +1,13 @@
 import math
 
 import torch
-
-Tensor = torch.Tensor
 import torch.nn.modules.loss
 from torch import nn, vmap
 from torch.nn.modules.loss import _Loss
 from torch.overrides import handle_torch_function, has_torch_function_variadic
 
-S2_BANDS = 13
+Tensor = torch.Tensor
+from data.constants.circa_constants import S2_BANDS
 
 
 def get_loss(config):
@@ -17,6 +16,7 @@ def get_loss(config):
 
         def criterion(pred, targ, var):
             return criterion1(pred, targ, var)
+
     elif config.loss == "MGNLL":
         criterion1 = MultiGaussianNLLLoss(
             reduction="mean",
@@ -28,16 +28,19 @@ def get_loss(config):
 
         def criterion(pred, targ, var):
             return criterion1(pred, targ, var)
+
     elif config.loss == "l1":
         criterion1 = nn.L1Loss()
 
         def criterion(pred, targ):
             return criterion1(pred, targ)
+
     elif config.loss == "l2":
         criterion1 = nn.MSELoss()
 
         def criterion(pred, targ):
             return criterion1(pred, targ)
+
     else:
         raise NotImplementedError
 
@@ -110,9 +113,7 @@ def gaussian_nll_loss(
         # This checks if the sizes match up to the final dimension, and the final dimension of var is of size 1.
         # This is also a homoscedastic case.
         # e.g. input.size = (10, 2, 3), var.size = (10, 2, 1)
-        elif (
-            input.size()[:-1] == var.size()[:-1] and var.size(-1) == 1
-        ):  # Heteroscedastic case
+        elif input.size()[:-1] == var.size()[:-1] and var.size(-1) == 1:  # Heteroscedastic case
             pass
 
         # If none of the above pass, then the size of var is incorrect.
@@ -152,21 +153,12 @@ def multi_diag_gaussian_nll(pred, target, var):
     k = pred.shape[-1]
     prec = torch.diag_embed(1 / var, offset=0, dim1=-2, dim2=-1)
     # the log-determinant of a diagonal matrix is simply the trace of the log of the diagonal matrix
-    logdetv = (
-        var.log().sum()
-    )  # this may be more numerically stable a general calculation
+    logdetv = var.log().sum()  # this may be more numerically stable a general calculation
     err = (pred - target).unsqueeze(dim=1)
     # for the Mahalanobis distance xTCx to be defined and >= 0, the precision matrix must be positive definite
-    xTCx = (
-        torch.bmm(torch.bmm(err, prec), err.permute(0, 2, 1))
-        .squeeze()
-        .nan_to_num()
-        .clamp(min=1e-9)
-    )  # note: equals torch.bmm(torch.bmm(-err, prec), -err)
+    xTCx = torch.bmm(torch.bmm(err, prec), err.permute(0, 2, 1)).squeeze().nan_to_num().clamp(min=1e-9)  # note: equals torch.bmm(torch.bmm(-err, prec), -err)
     # define the NLL loss
-    loss = -(
-        -k / 2 * torch.log(2 * torch.tensor(torch.pi)) - 1 / 2 * logdetv - 1 / 2 * xTCx
-    )
+    loss = -(-k / 2 * torch.log(2 * torch.tensor(torch.pi)) - 1 / 2 * logdetv - 1 / 2 * xTCx)
 
     return loss, torch.diag_embed(var, offset=0, dim1=-2, dim2=-1).cpu()
 
@@ -303,17 +295,13 @@ class GaussianNLLLoss(_Loss):
     full: bool
     eps: float
 
-    def __init__(
-        self, *, full: bool = False, eps: float = 1e-8, reduction: str = "mean"
-    ) -> None:
+    def __init__(self, *, full: bool = False, eps: float = 1e-8, reduction: str = "mean") -> None:
         super().__init__(None, None, reduction)
         self.full = full
         self.eps = eps
 
     def forward(self, input: Tensor, target: Tensor, var: Tensor) -> Tensor:
-        return gaussian_nll_loss(
-            input, target, var, full=self.full, eps=self.eps, reduction=self.reduction
-        )
+        return gaussian_nll_loss(input, target, var, full=self.full, eps=self.eps, reduction=self.reduction)
 
 
 class MultiGaussianNLLLoss(_Loss):

@@ -9,7 +9,7 @@ import torch
 from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
-from data.constants.circa_constants import MGRSC_SPLITS, S1_BANDS, S2_BANDS
+from data.constants.circa_constants import MGRSC_SPLITS
 
 # Set multiprocessing sharing strategy
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -19,7 +19,6 @@ MAX_SEQ_LENGTH: int = 30
 MIN_SEQ_LENGTH: int = 5
 SEED: int = 42
 
-# Type aliases for better readability
 DateArray = NDArray[dt.date]
 TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]
 SampleDict = Dict[str, Union[NDArray, Dict[str, NDArray], List[str]]]
@@ -54,7 +53,7 @@ class CIRCA_from_HDF5(Dataset):
     Attributes:
         phase (PhaseType): Data phase/split being used
         shuffle (bool): Whether to shuffle the data
-        include_S1 (bool): Whether to include Sentinel-1 data
+        use_sar (bool): Whether to include Sentinel-1 data
         rng (np.random.Generator): Random number generator
         hdf5_file (h5py.File): HDF5 file handle
         patches_dataset (pd.DataFrame): DataFrame containing patch metadata
@@ -69,7 +68,7 @@ class CIRCA_from_HDF5(Dataset):
         phase: PhaseType = "all",
         hdf5_file: Optional[Union[str, Path]] = None,
         shuffle: bool = False,
-        include_S1: bool = True,
+        use_sar: bool = True,
         channels: ChannelType = "all",
     ) -> None:
         """
@@ -79,7 +78,7 @@ class CIRCA_from_HDF5(Dataset):
             phase: Data phase ('train', 'val', 'test', 'train+val', or 'all')
             hdf5_file: Path to the HDF5 file containing the data
             shuffle: Whether to shuffle the dataset
-            include_S1: Whether to include Sentinel-1 SAR data
+            use_sar: Whether to include Sentinel-1 SAR data
             channels: Which channels to include ('all' or 'bgr-nir')
 
         Raises:
@@ -88,14 +87,11 @@ class CIRCA_from_HDF5(Dataset):
         """
         self.phase: PhaseType = phase
         self.shuffle: bool = shuffle
-        self.include_S1: bool = include_S1
+        self.use_sar: bool = use_sar
         self.rng: np.random.Generator = np.random.default_rng(seed=SEED)
         self.hdf5_file: h5py.File
         self.patches_dataset: pd.DataFrame
         self.hdf5_file, self.patches_dataset = self.setup_hdf5_file(hdf5_file)
-        self.S2_BANDS = S2_BANDS
-        if self.include_S1:
-            self.S1_BANDS = S1_BANDS
 
         # Channel configuration
         self.num_channels: int
@@ -158,7 +154,7 @@ class CIRCA_from_HDF5(Dataset):
         else:
             raise ValueError(f"Channels {channels} not recognized. Use 'all' or 'bgr-nir'.")
 
-        if self.include_S1:
+        if self.use_sar:
             num_channels += 4
 
         return num_channels, c_index_rgb, c_index_nir, s2_channels

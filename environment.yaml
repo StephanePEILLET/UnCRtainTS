@@ -2,25 +2,61 @@ name: uncrtaints
 channels:
   - nvidia
   - pytorch
-  - defaults
+  - conda-forge
+  - default
+channel_priority: true
 dependencies:
-  - nvidia::cudatoolkit=11.7
-  - python
-  - pip=20.3
-  - pytorch::pytorch=2.0.0
-  - numpy
+  - python==3.11.6
+  - pip
+  - pytorch ==2.0.1
+  - torchvision ==0.15.2
+  - torchmetrics ==1.2.1
+  - lightning ==2.3.3
+  - numpy >=1.22.4,<2
+  - pandas>=1.4.3
+  - pillow >=9.3.0,<10
+  - PyYAML>=6.0
+  - scikit-image>=0.18.3
+  - scikit-learn >=1.1.1,<2
+  - geopandas>=0.10
+  - einops >=0.3,<0.5
+  - fiona
+  - omegaconf >=2.2.3,<3
+  - rtree >=1,<2
+  - shapely
+  - rich>=13.4.1
+  - tensorboard
+  - tqdm
+  - py-opencv
+  - jsonargparse
+  - h5py
+  - python-dotenv
+  - optuna
+  - plotly
+  - wandb
+  - numba
+  - torchinfo
+  - tensorboardx
+  - ipykernel
+  - jupyter
+  - ipywidgets
+  - kornia
+  - rich
   - pip:
-    - matplotlib
-    - torchmetrics==0.6.0
-    - torchnet==0.0.4
-    - scipy
-    - scikit-image
-    - rasterio
-    - natsort
-    - tqdm
-    - Pillow 
-    - dominate 
-    - visdom 
-    - fvcore
-    - tensorboard
-    - s2cloudless==1.6.0
+      - matplotlib
+      - setuptools
+      - torch_scatter
+      - clearml
+      - torchgeometry
+      - prodict
+      - torchnet==0.0.4
+      - natsort
+      - dominate
+      - visdom
+      - fvcore
+      - pyproj
+      - rasterio
+      - s2cloudless==1.6.0
+      - nestargs
+      - scipy
+      - albumentations

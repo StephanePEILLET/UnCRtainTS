@@ -4,7 +4,7 @@ import os
 import numpy as np
 import torch
 
-from model.plot import (
+from src.plot import (
     continuous_matshow,
     discrete_matshow,
 )
@@ -118,11 +118,11 @@ def export(arrs, mod, export_dir, file_id=None):
 
 
 def prepare_output(config):
-    os.makedirs(os.path.join(config.res_dir, config.experiment_name), exist_ok=True)
+    os.makedirs(os.path.join(config.save_dir, config.experiment_name), exist_ok=True)
 
 
 def checkpoint(log, config):
-    with open(os.path.join(config.res_dir, config.experiment_name, "trainlog.json"), "w") as outfile:
+    with open(os.path.join(config.save_dir, config.experiment_name, "trainlog.json"), "w") as outfile:
         json.dump(log, outfile, indent=4)
 
 

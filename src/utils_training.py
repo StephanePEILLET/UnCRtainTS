@@ -16,6 +16,7 @@ def seed_packages(seed):
     os.environ["PYTHONHASHSEED"] = str(seed)
     torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = False
 
 
 def seed_worker(worker_id):
@@ -27,6 +28,8 @@ def seed_worker(worker_id):
 def recursive_todevice(x, device):
     if isinstance(x, torch.Tensor):
         return x.to(device)
+    elif isinstance(x, np.ndarray):
+        return torch.from_numpy(x).to(device)
     elif isinstance(x, dict):
         return {k: recursive_todevice(v, device) for k, v in x.items()}
     else:

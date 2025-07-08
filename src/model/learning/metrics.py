@@ -1,12 +1,7 @@
-import os
-import sys
-
 import numpy as np
 import torch
 
-sys.path.append(os.path.dirname(os.getcwd()))
-sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
-from util import pytorch_ssim
+from utils_misc import pytorch_ssim
 
 
 class Metric:
@@ -67,11 +62,7 @@ def img_metrics(target, pred, var=None, pixelwise=True):
             errvar_samplewise = {
                 **errvar_samplewise,
                 **{
-                    "pixelwise error": error.nanmean(0)
-                    .nanmean(0)
-                    .flatten()
-                    .cpu()
-                    .numpy(),
+                    "pixelwise error": error.nanmean(0).nanmean(0).flatten().cpu().numpy(),
                     "pixelwise ae": ae.nanmean(0).nanmean(0).flatten().cpu().numpy(),
                     "pixelwise se": se.nanmean(0).nanmean(0).flatten().cpu().numpy(),
                     "pixelwise var": var.nanmean(0).nanmean(0).flatten().cpu().numpy(),
@@ -119,11 +110,7 @@ class avg_img_metrics(Metric):
                 self.running_img_metrics[key] = val
             else:
                 self.running_nonan_count[key] += 1
-                self.running_img_metrics[key] = (
-                    self.running_nonan_count[key] - 1
-                ) / self.running_nonan_count[key] * self.running_img_metrics[
-                    key
-                ] + 1 / self.running_nonan_count[key] * val
+                self.running_img_metrics[key] = (self.running_nonan_count[key] - 1) / self.running_nonan_count[key] * self.running_img_metrics[key] + 1 / self.running_nonan_count[key] * val
 
     def value(self):
         return self.running_img_metrics

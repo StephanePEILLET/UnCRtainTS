@@ -5,11 +5,11 @@ License: MIT
 """
 
 import torch
-from src.backbones.ltae import LTAE2d, LTAE2dtiny
-from src.backbones.utae import ConvBlock, ConvLayer, TemporallySharedBlock
 from torch import nn
 
-S2_BANDS = 13
+from data.constants.circa_constants import S2_BANDS
+from src.model.backbones.ltae import LTAE2d, LTAE2dtiny
+from src.model.backbones.utae import ConvBlock, ConvLayer, TemporallySharedBlock
 
 
 def get_norm_layer(out_channels, num_feats, n_groups=4, layer_type="batch"):
@@ -105,9 +105,7 @@ class SE(nn.Module):
 
 
 class MBConv(TemporallySharedBlock):
-    def __init__(
-        self, inp, oup, downsample=False, expansion=4, norm="batch", n_groups=4
-    ):
+    def __init__(self, inp, oup, downsample=False, expansion=4, norm="batch", n_groups=4):
         super().__init__()
         self.downsample = downsample
         stride = 1 if self.downsample is False else 2
@@ -185,9 +183,7 @@ class Compact_Temporal_Aggregator(nn.Module):
                 attn = attn_mask.view(n_heads * b, t, h, w)
 
                 if x.shape[-2] > w:
-                    attn = nn.Upsample(
-                        size=x.shape[-2:], mode="bilinear", align_corners=False
-                    )(attn)
+                    attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
                     # this got moved out of ScaledDotProductAttention, apply after upsampling
                     attn = self.attn_dropout(attn)
                 else:
@@ -203,9 +199,7 @@ class Compact_Temporal_Aggregator(nn.Module):
                 return out
             elif self.mode == "att_mean":
                 attn = attn_mask.mean(dim=0)  # average over heads -> BxTxHxW
-                attn = nn.Upsample(
-                    size=x.shape[-2:], mode="bilinear", align_corners=False
-                )(attn)
+                attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
                 # this got moved out of ScaledDotProductAttention, apply after upsampling
                 attn = self.attn_dropout(attn)
                 attn = attn * (~pad_mask).float()[:, :, None, None]
@@ -219,9 +213,7 @@ class Compact_Temporal_Aggregator(nn.Module):
             n_heads, b, t, h, w = attn_mask.shape
             attn = attn_mask.view(n_heads * b, t, h, w)
             if x.shape[-2] > w:
-                attn = nn.Upsample(
-                    size=x.shape[-2:], mode="bilinear", align_corners=False
-                )(attn)
+                attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
                 # this got moved out of ScaledDotProductAttention, apply after upsampling
                 attn = self.attn_dropout(attn)
             else:
@@ -234,9 +226,7 @@ class Compact_Temporal_Aggregator(nn.Module):
             return out
         elif self.mode == "att_mean":
             attn = attn_mask.mean(dim=0)  # average over heads -> BxTxHxW
-            attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(
-                attn
-            )
+            attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
             # this got moved out of ScaledDotProductAttention, apply after upsampling
             attn = self.attn_dropout(attn)
             out = (x * attn[:, :, None, :, :]).sum(dim=1)
@@ -252,10 +242,12 @@ def get_nonlinearity(mode, eps):
 
         def fct(vars):
             return nn.Softplus(beta=1, threshold=20)(vars) + eps
+
     elif mode == "elu":
 
         def fct(vars):
             return nn.ELU()(vars) + 1 + eps
+
     else:
         fct = nn.Identity()
     return fct
@@ -327,12 +319,8 @@ class UNCRTAINTS(nn.Module):
         self.use_v = use_v
         self.block_type = block_type
 
-        self.enc_dim = (
-            decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
-        )
-        self.stack_dim = (
-            sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
-        )
+        self.enc_dim = decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
+        self.stack_dim = sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
         self.pad_value = pad_value
         self.padding_mode = padding_mode
 
@@ -354,14 +342,7 @@ class UNCRTAINTS(nn.Module):
         )
 
         if self.block_type == "mbconv":
-            self.in_block = nn.ModuleList(
-                [
-                    MBConv(
-                        layer, layer, downsample=False, expansion=2, norm=encoder_norm
-                    )
-                    for layer in encoder_widths
-                ]
-            )
+            self.in_block = nn.ModuleList([MBConv(layer, layer, downsample=False, expansion=2, norm=encoder_norm) for layer in encoder_widths])
         elif self.block_type == "residual":
             self.in_block = nn.ModuleList(
                 [
@@ -398,9 +379,7 @@ class UNCRTAINTS(nn.Module):
                 )
                 # linearly combine mask-weighted
                 v_dim = encoder_widths[0]
-                self.include_v = nn.Conv2d(
-                    encoder_widths[0] + v_dim, encoder_widths[0], 1
-                )
+                self.include_v = nn.Conv2d(encoder_widths[0] + v_dim, encoder_widths[0], 1)
             else:
                 self.temporal_encoder = LTAE2dtiny(
                     in_channels=encoder_widths[0],
@@ -413,14 +392,7 @@ class UNCRTAINTS(nn.Module):
             self.temporal_aggregator = Compact_Temporal_Aggregator(mode=agg_mode)
 
         if self.block_type == "mbconv":
-            self.out_block = nn.ModuleList(
-                [
-                    MBConv(
-                        layer, layer, downsample=False, expansion=2, norm=decoder_norm
-                    )
-                    for layer in decoder_widths
-                ]
-            )
+            self.out_block = nn.ModuleList([MBConv(layer, layer, downsample=False, expansion=2, norm=decoder_norm) for layer in decoder_widths])
         elif self.block_type == "residual":
             self.out_block = nn.ModuleList(
                 [
@@ -458,9 +430,7 @@ class UNCRTAINTS(nn.Module):
 
         eps = 1e-9 if self.scale_by == 1.0 else 1e-3
 
-        if (
-            self.separate_out
-        ):  # define two separate layer streams for mean and variance predictions
+        if self.separate_out:  # define two separate layer streams for mean and variance predictions
             self.out_conv_mean_1 = ConvBlock(
                 nkernels=[decoder_widths[0]] + [S2_BANDS],
                 k=1,
@@ -490,21 +460,15 @@ class UNCRTAINTS(nn.Module):
 
         # set output nonlinearities
         if out_nonlin_mean:
-            self.out_mean = lambda vars: self.scale_by * nn.Sigmoid()(
-                vars
-            )  # this is for predicting mean values in [0, 1]
+            self.out_mean = lambda vars: self.scale_by * nn.Sigmoid()(vars)  # this is for predicting mean values in [0, 1]
         else:
-            self.out_mean = (
-                nn.Identity()
-            )  # just keep the mean estimates, without applying a nonlinearity
+            self.out_mean = nn.Identity()  # just keep the mean estimates, without applying a nonlinearity
 
         if self.covmode in ["uni", "iso", "diag"]:
             self.diag_var = get_nonlinearity(out_nonlin_var, eps)
 
     def forward(self, input, batch_positions=None):
-        pad_mask = (
-            (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)
-        )  # BxT pad mask
+        pad_mask = (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)  # BxT pad mask
         # SPATIAL ENCODER
         # collect feature maps in list 'feature_maps'
         out = self.in_conv.smart_forward(input)
@@ -514,27 +478,19 @@ class UNCRTAINTS(nn.Module):
 
         if not self.is_mono:
             att_down = 32
-            down = nn.AdaptiveMaxPool2d((att_down, att_down))(
-                out.view(out.shape[0] * out.shape[1], *out.shape[2:])
-            ).view(out.shape[0], out.shape[1], out.shape[2], att_down, att_down)
+            down = nn.AdaptiveMaxPool2d((att_down, att_down))(out.view(out.shape[0] * out.shape[1], *out.shape[2:])).view(out.shape[0], out.shape[1], out.shape[2], att_down, att_down)
 
             # TEMPORAL ENCODER
             if self.use_v:
-                v, att = self.temporal_encoder(
-                    down, batch_positions=batch_positions, pad_mask=pad_mask
-                )
+                v, att = self.temporal_encoder(down, batch_positions=batch_positions, pad_mask=pad_mask)
             else:
-                att = self.temporal_encoder(
-                    down, batch_positions=batch_positions, pad_mask=pad_mask
-                )
+                att = self.temporal_encoder(down, batch_positions=batch_positions, pad_mask=pad_mask)
 
             out = self.temporal_aggregator(out, pad_mask=pad_mask, attn_mask=att)
 
             if self.use_v:
                 # upsample values to input resolution, then linearly combine with attention masks
-                up_v = nn.Upsample(
-                    size=(out.shape[-2:]), mode="bilinear", align_corners=False
-                )(v)
+                up_v = nn.Upsample(size=(out.shape[-2:]), mode="bilinear", align_corners=False)(v)
                 out = self.include_v(torch.cat((out, up_v), dim=1))
         else:
             out = out.squeeze(dim=1)
@@ -560,17 +516,11 @@ class UNCRTAINTS(nn.Module):
         # apply output nonlinearities
 
         # get mean predictions
-        out_loc = self.out_mean(
-            out[:, :, : self.mean_idx, ...]
-        )  # mean predictions in [0,1]
+        out_loc = self.out_mean(out[:, :, : self.mean_idx, ...])  # mean predictions in [0,1]
         if not self.covmode:
             return out_loc
 
-        out_cov = self.diag_var(
-            out[:, :, self.mean_idx : self.vars_idx, ...]
-        )  # var predictions > 0
-        out = torch.cat(
-            (out_loc, out_cov), dim=2
-        )  # stack mean and var predictions plus cloud masks
+        out_cov = self.diag_var(out[:, :, self.mean_idx : self.vars_idx, ...])  # var predictions > 0
+        out = torch.cat((out_loc, out_cov), dim=2)  # stack mean and var predictions plus cloud masks
 
         return out

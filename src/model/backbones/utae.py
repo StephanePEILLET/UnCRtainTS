@@ -5,9 +5,11 @@ License: MIT
 """
 
 import torch
-from src.backbones.convlstm import BConvLSTM, ConvLSTM
-from src.backbones.ltae import LTAE2d
 from torch import nn
+
+from data.constants.circa_constants import S2_BANDS
+from src.model.backbones.convlstm import BConvLSTM, ConvLSTM
+from src.model.backbones.ltae import LTAE2d
 
 
 # function to normalize gradient magnitudes,
@@ -31,7 +33,7 @@ class UNet(nn.Module):
         input_dim,
         encoder_widths=[64, 64, 64, 128],
         decoder_widths=[32, 32, 64, 128],
-        out_conv=[13],
+        out_conv=[S2_BANDS],
         out_nonlin_mean=False,
         out_nonlin_var="relu",
         str_conv_k=4,
@@ -90,12 +92,8 @@ class UNet(nn.Module):
         self.return_maps = return_maps
         self.encoder_widths = encoder_widths
         self.decoder_widths = decoder_widths
-        self.enc_dim = (
-            decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
-        )
-        self.stack_dim = (
-            sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
-        )
+        self.enc_dim = decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
+        self.stack_dim = sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
         self.pad_value = pad_value
         self.encoder = encoder
         if encoder:
@@ -139,7 +137,7 @@ class UNet(nn.Module):
                 k=str_conv_k,
                 s=str_conv_s,
                 p=str_conv_p,
-                norm_skip=norm_skip,  #'batch'
+                norm_skip=norm_skip,  # 'batch'
                 norm_up=norm_up,  # 'batch'
                 norm=decoder_norm,  # "batch",
                 padding_mode=padding_mode,
@@ -162,22 +160,16 @@ class UNet(nn.Module):
         if out_nonlin_mean:
             self.out_mean = nn.Sigmoid()  # this is for predicting mean values in [0, 1]
         else:
-            self.out_mean = (
-                nn.Identity()
-            )  # just keep the mean estimates, without applying a nonlinearity
+            self.out_mean = nn.Identity()  # just keep the mean estimates, without applying a nonlinearity
 
         if out_nonlin_var == "relu":
             self.out_var = nn.ReLU()  # this is for predicting var values > 0
         elif out_nonlin_var == "softplus":
-            self.out_var = nn.Softplus(
-                beta=1, threshold=20
-            )  # a smooth approximation to the ReLU function
+            self.out_var = nn.Softplus(beta=1, threshold=20)  # a smooth approximation to the ReLU function
         elif out_nonlin_var == "elu":
             self.out_var = lambda vars: nn.ELU()(vars) + 1 + 1e-8
         else:  # just keep the variance estimates,
-            self.out_var = (
-                nn.Identity()
-            )  # just keep the variance estimates, without applying a nonlinearity
+            self.out_var = nn.Identity()  # just keep the variance estimates, without applying a nonlinearity
 
     def forward(self, input, batch_positions=None, return_att=False):
         # SPATIAL ENCODER
@@ -190,16 +182,12 @@ class UNet(nn.Module):
         # SPATIAL DECODER
         if self.return_maps:
             maps = [out]
-        out = out[
-            :, 0, ...
-        ]  # note: we index to reduce the temporal dummy dimension of size 1
+        out = out[:, 0, ...]  # note: we index to reduce the temporal dummy dimension of size 1
         for i in range(self.n_stages - 1):
             # skip-connect features between paired encoder/decoder blocks
             skip = feature_maps[-(i + 2)]
             # upconv the features, concatenating current 'out' and paired 'skip'
-            out = self.up_blocks[i](
-                out, skip[:, 0, ...]
-            )  # note: we index to reduce the temporal dummy dimension of size 1
+            out = self.up_blocks[i](out, skip[:, 0, ...])  # note: we index to reduce the temporal dummy dimension of size 1
             if self.return_maps:
                 maps.append(out)
 
@@ -210,11 +198,9 @@ class UNet(nn.Module):
             # append a singelton temporal dimension such that outputs are [B x T=1 x C x H x W]
             out = out.unsqueeze(1)
             # optionally apply an output nonlinearity
-            out_mean = self.out_mean(out[:, :, :13, ...])  # mean predictions
-            out_std = self.out_var(out[:, :, 13:, ...])  # var predictions > 0
-            out = torch.cat(
-                (out_mean, out_std), dim=2
-            )  # stack mean and var predictions
+            out_mean = self.out_mean(out[:, :, :S2_BANDS, ...])  # mean predictions
+            out_std = self.out_var(out[:, :, S2_BANDS:, ...])  # var predictions > 0
+            out = torch.cat((out_mean, out_std), dim=2)  # stack mean and var predictions
 
             if return_att:
                 return out, None
@@ -230,7 +216,7 @@ class UTAE(nn.Module):
         input_dim,
         encoder_widths=[64, 64, 64, 128],
         decoder_widths=[32, 32, 64, 128],
-        out_conv=[13],
+        out_conv=[S2_BANDS],
         out_nonlin_mean=False,
         out_nonlin_var="relu",
         str_conv_k=4,
@@ -295,12 +281,8 @@ class UTAE(nn.Module):
         self.return_maps = return_maps
         self.encoder_widths = encoder_widths
         self.decoder_widths = decoder_widths
-        self.enc_dim = (
-            decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
-        )
-        self.stack_dim = (
-            sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
-        )
+        self.enc_dim = decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
+        self.stack_dim = sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
         self.pad_value = pad_value
         self.encoder = encoder
         self.scale_by = scale_by
@@ -376,31 +358,21 @@ class UTAE(nn.Module):
             last_relu=False,
         )
         if out_nonlin_mean:
-            self.out_mean = lambda vars: self.scale_by * nn.Sigmoid()(
-                vars
-            )  # this is for predicting mean values in [0, 1]
+            self.out_mean = lambda vars: self.scale_by * nn.Sigmoid()(vars)  # this is for predicting mean values in [0, 1]
         else:
-            self.out_mean = lambda vars: nn.Identity()(
-                vars
-            )  # just keep the mean estimates, without applying a nonlinearity
+            self.out_mean = lambda vars: nn.Identity()(vars)  # just keep the mean estimates, without applying a nonlinearity
 
         if out_nonlin_var == "relu":
             self.out_var = nn.ReLU()  # this is for predicting var values > 0
         elif out_nonlin_var == "softplus":
-            self.out_var = nn.Softplus(
-                beta=1, threshold=20
-            )  # a smooth approximation to the ReLU function
+            self.out_var = nn.Softplus(beta=1, threshold=20)  # a smooth approximation to the ReLU function
         elif out_nonlin_var == "elu":
             self.out_var = lambda vars: nn.ELU()(vars) + 1 + 1e-8
         else:  # just keep the variance estimates,
-            self.out_var = (
-                nn.Identity()
-            )  # just keep the variance estimates, without applying a nonlinearity
+            self.out_var = nn.Identity()  # just keep the variance estimates, without applying a nonlinearity
 
     def forward(self, input, batch_positions=None, return_att=False):
-        pad_mask = (
-            (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)
-        )  # BxT pad mask
+        pad_mask = (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)  # BxT pad mask
         # SPATIAL ENCODER
         # collect feature maps in list 'feature_maps'
         out = self.in_conv.smart_forward(input)
@@ -413,16 +385,12 @@ class UTAE(nn.Module):
         #   -> every attention pixel has an 8x8 receptive field
         # att.shape is torch.Size([h, B, T, 32, 32])
         # out.shape is torch.Size([B, 128, 32, 32]), in self-attention class it's Size([B*32*32*h=32768, 1, 16]
-        out, att = self.temporal_encoder(
-            feature_maps[-1], batch_positions=batch_positions, pad_mask=pad_mask
-        )
+        out, att = self.temporal_encoder(feature_maps[-1], batch_positions=batch_positions, pad_mask=pad_mask)
         # SPATIAL DECODER
         if self.return_maps:
             maps = [out]
         for i in range(self.n_stages - 1):
-            skip = self.temporal_aggregator(
-                feature_maps[-(i + 2)], pad_mask=pad_mask, attn_mask=att
-            )
+            skip = self.temporal_aggregator(feature_maps[-(i + 2)], pad_mask=pad_mask, attn_mask=att)
             out = self.up_blocks[i](out, skip)
             if self.return_maps:
                 maps.append(out)
@@ -434,11 +402,9 @@ class UTAE(nn.Module):
             # append a singelton temporal dimension such that outputs are [B x T=1 x C x H x W]
             out = out.unsqueeze(1)
             # optionally apply an output nonlinearity
-            out_mean = self.out_mean(out[:, :, :13, ...])  # mean predictions
-            out_std = self.out_var(out[:, :, 13:, ...])  # var predictions > 0
-            out = torch.cat(
-                (out_mean, out_std), dim=2
-            )  # stack mean and var predictions
+            out_mean = self.out_mean(out[:, :, :S2_BANDS, ...])  # mean predictions
+            out_std = self.out_var(out[:, :, S2_BANDS:, ...])  # var predictions > 0
+            out = torch.cat((out_mean, out_std), dim=2)  # stack mean and var predictions
 
             if return_att:
                 return out, att
@@ -475,12 +441,7 @@ class TemporallySharedBlock(nn.Module):
             if self.pad_value is not None:
                 pad_mask = (out == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)
                 if pad_mask.any():
-                    temp = (
-                        torch.ones(
-                            self.out_shape, device=input.device, requires_grad=False
-                        )
-                        * self.pad_value
-                    )
+                    temp = torch.ones(self.out_shape, device=input.device, requires_grad=False) * self.pad_value
                     temp[~pad_mask] = self.forward(out[~pad_mask])
                     out = temp
                 else:
@@ -517,6 +478,7 @@ class ConvLayer(nn.Module):
                     num_channels=num_feats,
                     num_groups=n_groups,
                 )
+
         else:
             nl = None
         for i in range(len(nkernels) - 1):
@@ -652,9 +614,7 @@ class UpConvBlock(nn.Module):
                 nn.ReLU(),
             )
         else:
-            self.skip_conv = nn.Sequential(
-                nn.Conv2d(in_channels=d, out_channels=d, kernel_size=1), nn.ReLU()
-            )
+            self.skip_conv = nn.Sequential(nn.Conv2d(in_channels=d, out_channels=d, kernel_size=1), nn.ReLU())
 
         # transposed CONV layer to perform upsampling
         """
@@ -675,9 +635,7 @@ class UpConvBlock(nn.Module):
                     stride=s,
                     padding=p,
                 ),
-                get_norm_layer(
-                    d_out, d_out, n_groups, norm_up
-                ),  # nn.BatchNorm2d(d_out),
+                get_norm_layer(d_out, d_out, n_groups, norm_up),  # nn.BatchNorm2d(d_out),
                 nn.ReLU(),
             )
         else:
@@ -707,9 +665,7 @@ class UpConvBlock(nn.Module):
     def forward(self, input, skip):
         out = self.up(input)  # transposed CONV on previous layer
         # apply another CONV and norm to the skipped input               --> paired encoder map
-        out = torch.cat(
-            [out, self.skip_conv(skip)], dim=1
-        )  # concat '' with paired encoder map
+        out = torch.cat([out, self.skip_conv(skip)], dim=1)  # concat '' with paired encoder map
         out = self.conv1(out)  # CONV again
         out = out + self.conv2(out)  # conv with residual
         return out
@@ -727,9 +683,7 @@ class Temporal_Aggregator(nn.Module):
                 attn = attn_mask.view(n_heads * b, t, h, w)
 
                 if x.shape[-2] > w:
-                    attn = nn.Upsample(
-                        size=x.shape[-2:], mode="bilinear", align_corners=False
-                    )(attn)
+                    attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
                 else:
                     attn = nn.AvgPool2d(kernel_size=w // x.shape[-2])(attn)
 
@@ -743,9 +697,7 @@ class Temporal_Aggregator(nn.Module):
                 return out
             elif self.mode == "att_mean":
                 attn = attn_mask.mean(dim=0)  # average over heads -> BxTxHxW
-                attn = nn.Upsample(
-                    size=x.shape[-2:], mode="bilinear", align_corners=False
-                )(attn)
+                attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
                 attn = attn * (~pad_mask).float()[:, :, None, None]
                 out = (x * attn[:, :, None, :, :]).sum(dim=1)
                 return out
@@ -757,9 +709,7 @@ class Temporal_Aggregator(nn.Module):
             n_heads, b, t, h, w = attn_mask.shape
             attn = attn_mask.view(n_heads * b, t, h, w)
             if x.shape[-2] > w:
-                attn = nn.Upsample(
-                    size=x.shape[-2:], mode="bilinear", align_corners=False
-                )(attn)
+                attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
             else:
                 attn = nn.AvgPool2d(kernel_size=w // x.shape[-2])(attn)
             attn = attn.view(n_heads, b, t, *x.shape[-2:])
@@ -770,9 +720,7 @@ class Temporal_Aggregator(nn.Module):
             return out
         elif self.mode == "att_mean":
             attn = attn_mask.mean(dim=0)  # average over heads -> BxTxHxW
-            attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(
-                attn
-            )
+            attn = nn.Upsample(size=x.shape[-2:], mode="bilinear", align_corners=False)(attn)
             out = (x * attn[:, :, None, :, :]).sum(dim=1)
             return out
         elif self.mode == "mean":
@@ -789,7 +737,7 @@ class RecUNet(nn.Module):
         input_dim,
         encoder_widths=[64, 64, 64, 128],
         decoder_widths=[32, 32, 64, 128],
-        out_conv=[13],
+        out_conv=[S2_BANDS],
         str_conv_k=4,
         str_conv_s=2,
         str_conv_p=1,
@@ -806,12 +754,8 @@ class RecUNet(nn.Module):
         self.temporal = temporal
         self.encoder_widths = encoder_widths
         self.decoder_widths = decoder_widths
-        self.enc_dim = (
-            decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
-        )
-        self.stack_dim = (
-            sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
-        )
+        self.enc_dim = decoder_widths[0] if decoder_widths is not None else encoder_widths[0]
+        self.stack_dim = sum(decoder_widths) if decoder_widths is not None else sum(encoder_widths)
         self.pad_value = pad_value
 
         self.encoder = encoder
@@ -901,9 +845,7 @@ class RecUNet(nn.Module):
         )
 
     def forward(self, input, batch_positions=None):
-        pad_mask = (
-            (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)
-        )  # BxT pad mask
+        pad_mask = (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)  # BxT pad mask
 
         out = self.in_conv.smart_forward(input)
 
@@ -930,9 +872,7 @@ class RecUNet(nn.Module):
             maps = [out]
         for i in range(self.n_stages - 1):
             if self.temporal != "mono":
-                skip = self.temporal_aggregator(
-                    feature_maps[-(i + 2)], pad_mask=pad_mask
-                )
+                skip = self.temporal_aggregator(feature_maps[-(i + 2)], pad_mask=pad_mask)
             else:
                 skip = feature_maps[-(i + 2)]
             out = self.up_blocks[i](out, skip)

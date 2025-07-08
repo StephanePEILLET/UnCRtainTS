@@ -1,0 +1,73 @@
+model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
+experiment_name: my_first_train_experiment # Name of the current experiment
+
+# Mode parameters
+save_dir: "./results"                   # Path to where the results are stored, e.g. ./results for training or ./inference for testing
+plot_every: -1                        # Interval (in items) of exporting plots at validation or test time. Set -1 to disable
+export_every: -1                      # Interval (in items) of exporting data at validation or test time. Set -1 to disable
+
+# Data processing parameters
+data:
+    cloud_masks: "s2cloudless_mask"                # Type of cloud mask to use [cloud_cloudshadow_mask | s2cloudless_map | s2cloudless_mask]
+    sample_type: "cloudy_cloudfree"                # Sampling strategy ('generic' or 'cloudy_cloudfree')
+    sampler: "fixed"                               # Sampler type ('fixed', 'random', or 'stratified')
+    n_input_samples: 3                             # Number of input samples to use
+    rescale_method: "default"                      # Method for rescaling data ('default', 'minmax', or 'standard')
+    min_cov: 0.0                                   # Minimum cloud coverage threshold (0-1)
+    max_cov: 1.0                                   # Maximum cloud coverage threshold (0-1)
+    ref_date: "2014-04-03"               # reference date for Sentinel observations
+    max_samples_count: 1000000000        # count of data (sub-)samples to take
+    max_samples_frac: 1.0                # fraction of data (sub-)samples to take
+    vary_samples: false
+
+# Model parameters
+encoder_widths: [128]                 # e.g. [64,64,64,128] for U-TAE or [128] for UnCRtainTS
+decoder_widths: [128,128,128,128,128] # e.g. [64,64,64,128] for U-TAE or [128,128,128,128,128] for UnCRtainTS
+out_conv: [10]                          # S2_BANDS if inserting another layer then consider treating normalizations separately
+mean_nonLinearity: false              # Whether to apply a sigmoidal output nonlinearity to the mean prediction
+var_nonLinearity: softplus            # How to squash the network's variance outputs [relu | softplus | elu ]
+agg_mode: att_group                   # Type of temporal aggregation in L-TAE module
+encoder_norm: group                   # e.g. 'group' (when using many channels) or 'instance' (for few channels)
+decoder_norm: batch                   # e.g. 'group' (when using many channels) or 'instance' (for few channels)
+block_type: mbconv                    # Type of CONV block to use [residual | mbconv]
+padding_mode: reflect
+pad_value: 0.0
+
+# Attention-specific parameters
+n_head: 16                            # default value of 16, 4 for debugging
+d_model: 256                          # layers in L-TAE, default value of 256
+positional_encoding: false            # whether to use positional encoding or not
+d_k: 4
+low_res_size: 32
+use_v: true                           # whether to use values v or not
+
+# flags specific to uncertainty modeling
+covmode: "diag"                      # covariance matrix type [uni|iso|diag]
+scale_by: 1.0                        # rescale data within model, e.g. to [0,10]
+separate_out: false                  # whether to separately process mean and variance predictions or in a shared layer
+
+# Training parameters
+
+loss: MGNLL                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
+resume_from: false                    # Resume training acc. to JSON in --experiment_name and *.pth chckp in --trained_checkp
+unfreeze_after: 0                     # When to unfreeze ALL weights for training
+epochs: 20                            # Number of epochs to train
+batch_size: 1                         # Batch size
+chunk_size: null                      # Size of vmap batches, this can be adjusted to accommodate for additional memory needs
+lr:  0.01                             # Learning rate, e.g. 0.01
+gamma: 1.0                            # Learning rate decay parameter for scheduler
+val_every: 1.0                        # Interval in epochs between two validation steps
+val_after: 0                          # Do validation only after that many epochs
+
+# Set-up parameters
+num_workers: 0                        # Number of data loading workers
+rdm_seed: 1                           # Random seed
+device: cuda                          # Name of device to use for tensor computations (cuda/cpu)
+display_step: 10                      # Interval in batches between display of training metrics
+profile: false                        # whether to profile code or not
+
+# Resume training
+resume_at: 0                          # Epoch to resume training from (may re-weight --lr in the optimizer) or epoch to load checkpoint from at test time
+pretrain: false                       # whether to perform pretraining on SEN12MS-CR or training on SEN12MS-CR-TS
+trained_checkp: ""                    # Path to loading a pre-trained network *.pth file, rather than initializing weights randomly
+

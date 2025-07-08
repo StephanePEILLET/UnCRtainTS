@@ -1,44 +1,45 @@
 import json
 import os
-import pprint
 import sys
 
 import torch
+from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 
-from model.data_module import get_dataloaders, get_datasets
-from model.logger import (
+from data.data_module import UnCRtainTS_datamodule
+from src.cli import parse_config
+from src.logger import (
     checkpoint,
     prepare_output,
     save_results,
 )
-from model.setup_args import create_parser, setup_config
-from model.src import losses, utils
-from model.src.learning.weight_init import weight_init
-from model.src.model_utils import (
+from src.model import losses, utils
+from src.model.learning.weight_init import weight_init
+from src.model.model_utils import (
     freeze_layers,
     get_model,
     load_checkpoint,
     load_model,
     save_model,
 )
-from model.trainer import iterate
-from model.utils_training import seed_packages, seed_worker
+from src.trainer import iterate
+from src.utils_training import seed_packages, seed_worker
+from utils_misc import config_utils
 
 
 def main():
-    parser = create_parser(mode="train")
-    config = setup_config(parser)
+    config = parse_config(mode="train")
     # seed everything
     seed_packages(config.rdm_seed)
 
-    pprint.pprint(config)
+    # pprint.pprint(config)
+    config_utils.print_config_rich(config=config)
+
     # Chargement des dataloaders
-    dt_train, dt_val, dt_test = get_datasets(config)
-    train_loader, val_loader, test_loader = get_dataloaders(config, dt_train, dt_val, dt_test)
+    dm = UnCRtainTS_datamodule(config)
 
     # instantiate tensorboard logger
-    writer = SummaryWriter(os.path.join(os.path.dirname(config.res_dir), "logs", config.experiment_name))
+    writer = SummaryWriter(os.path.join(os.path.dirname(config.save_dir), "logs", config.experiment_name))
     prepare_output(config)
     device = torch.device(config.device)
 
@@ -47,13 +48,13 @@ def main():
     model = get_model(config)  # torch.compile(get_model(config))
 
     # set model properties
-    model.len_epoch = len(train_loader)
+    model.len_epoch = len(dm.dt_train)
 
     config.N_params = utils.get_ntrainparams(model)
-    print("\n\nTrainable layers:")
-    for name, p in model.named_parameters():
-        if p.requires_grad:
-            print(f"\t{name}")
+    # print("\n\nTrainable layers:")
+    # for name, p in model.named_parameters():
+    #     if p.requires_grad:
+    #         print(f"\t{name}")
     model = model.to(device)
     # do random weight initialization
     print("\nInitializing weights randomly.")
@@ -69,8 +70,8 @@ def main():
             load_out_partly=config.model in ["uncrtaints"],
         )
 
-    with open(os.path.join(config.res_dir, config.experiment_name, "conf.json"), "w") as file:
-        file.write(json.dumps(vars(config), indent=4))
+    with open(os.path.join(config.save_dir, config.experiment_name, "conf.json"), "w") as file:
+        file.write(json.dumps(OmegaConf.to_container(config, resolve=True), indent=4))
     print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
     print(model)
 
@@ -82,6 +83,11 @@ def main():
 
     # Training loop
     trainlog = {}
+
+    # Dataloaders
+    dl_train = dm.train_dataloader()
+    dl_val = dm.val_dataloader()
+    dl_test = dm.test_dataloader()
 
     # resume training at scheduler's latest epoch, != 0 if --resume_from
     begin_at = config.resume_at if config.resume_at >= 0 else model.scheduler_G.state_dict()["last_epoch"]
@@ -100,14 +106,14 @@ def main():
 
         # re-seed train generator for each epoch anew, depending on seed choice plus current epoch number
         #   ~ else, dataloader provides same samples no matter what epoch training starts/resumes from
-        #   ~ note: only re-seed train split dataloader (if config.vary_samples), but keep all others consistent
+        #   ~ note: only re-seed train split dataloader (if config.data.vary_samples), but keep all others consistent
         #   ~ if desiring different runs, then the seeds must at least be config.epochs numbers apart
-        if config.vary_samples:
+        if config.data.vary_samples:
             # condition dataloader samples on current epoch count
             f = torch.Generator()
             f.manual_seed(config.rdm_seed + epoch)
-            train_loader = torch.utils.data.DataLoader(
-                dt_train,
+            dl_train = torch.utils.data.DataLoader(
+                dl_train,
                 batch_size=config.batch_size,
                 shuffle=True,
                 worker_init_fn=seed_worker,
@@ -117,9 +123,10 @@ def main():
 
         train_metrics = iterate(
             model,
-            data_loader=train_loader,
+            data_loader=dl_train,
             config=config,
             writer=writer,
+            s2_bands=dm.dt_train.s2_channels,
             mode="train",
             epoch=epoch,
             device=device,
@@ -134,9 +141,10 @@ def main():
 
             val_metrics, val_img_metrics = iterate(
                 model,
-                data_loader=val_loader,
+                data_loader=dl_val,
                 config=config,
                 writer=writer,
+                s2_bands=dm.dt_val.s2_channels,
                 mode="val",
                 epoch=epoch,
                 device=device,
@@ -153,10 +161,10 @@ def main():
             print(f"validation image metrics: {val_img_metrics}")
             save_results(
                 val_img_metrics,
-                os.path.join(config.res_dir, config.experiment_name),
+                os.path.join(config.save_dir, config.experiment_name),
                 split=f"val_epoch_{epoch}",
             )
-            print(f"\nLogged validation epoch {epoch} metrics to path {os.path.join(config.res_dir, config.experiment_name)}")
+            print(f"\nLogged validation epoch {epoch} metrics to path {os.path.join(config.save_dir, config.experiment_name)}")
 
             # checkpoint best model
             trainlog[epoch] = {**train_metrics, **val_metrics}
@@ -175,16 +183,17 @@ def main():
 
     # following training, test on hold-out data
     print("Testing best epoch . . .")
-    load_checkpoint(config, config.res_dir, model, "model")
+    load_checkpoint(config, config.save_dir, model, "model")
 
     model.eval()
     model.netG.eval()
 
     test_metrics, test_img_metrics = iterate(
         model,
-        data_loader=test_loader,
+        data_loader=dl_test,
         config=config,
         writer=writer,
+        s2_bands=dm.dt_test.s2_channels,
         mode="test",
         epoch=epoch,
         device=device,
@@ -198,10 +207,10 @@ def main():
     print(f"\nTest image metrics: {test_img_metrics}")
     save_results(
         test_img_metrics,
-        os.path.join(config.res_dir, config.experiment_name),
+        os.path.join(config.save_dir, config.experiment_name),
         split="test",
     )
-    print(f"\nLogged test metrics to path {os.path.join(config.res_dir, config.experiment_name)}")
+    print(f"\nLogged test metrics to path {os.path.join(config.save_dir, config.experiment_name)}")
 
     # close tensorboard logging
     writer.close()

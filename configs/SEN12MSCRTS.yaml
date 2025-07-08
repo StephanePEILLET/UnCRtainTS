@@ -1,0 +1,11 @@
+model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
+experiment_name: SEN12MSCRTS_experiment # Name of the current experiment
+
+# flags specific to SEN12MS-CR and SEN12MS-CR-TS
+data:
+  use_sar: true                         # whether to use SAR or not
+  root1: "/home/data/SEN12MSCRTS"      # path to your copy of SEN12MS-CR-TS
+  root2: "/home/data/SEN12MSCRTS"      # path to your copy of SEN12MS-CR-TS validation & test splits
+  root3: "/home/data/SEN12MSCR"        # path to your copy of SEN12MS-CR for pretraining
+  precomputed: "/home/code/UnCRtainTS/util/precomputed"  # path to pre-computed cloud statistics
+  region: "all"                        # region to (sub-)sample ROI from [all|africa|america|asiaEast|asiaWest|europa]

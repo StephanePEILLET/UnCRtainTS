@@ -1,9 +1,9 @@
 import torch
 from fvcore.nn import FlopCountAnalysis
-from src import losses, model_utils
 from torch import nn
 
-S2_BANDS = 13
+from data.constants.circa_constants import S2_BANDS
+from src.model import losses, model_utils
 
 
 class BaseModel(nn.Module):
@@ -44,9 +44,7 @@ class BaseModel(nn.Module):
         self.optimizer_G = torch.optim.Adam(paramsG, lr=config.lr)
 
         # 2 scheduler: for G, note: stepping takes place at the end of epoch
-        self.scheduler_G = torch.optim.lr_scheduler.ExponentialLR(
-            self.optimizer_G, gamma=self.config.gamma
-        )
+        self.scheduler_G = torch.optim.lr_scheduler.ExponentialLR(self.optimizer_G, gamma=self.config.gamma)
 
         self.real_A = None
         self.fake_B = None
@@ -67,9 +65,7 @@ class BaseModel(nn.Module):
             # compute MFLOPS per input sample
             self.flops = (flopstats.total() * 1e-6) / self.config.batch_size
             print(f"MFLOP count: {self.flops}")
-        self.netG.variance = (
-            None  # purge earlier variance prediction, re-compute via get_loss_G()
-        )
+        self.netG.variance = None  # purge earlier variance prediction, re-compute via get_loss_G()
 
     def backward_G(self):
         # calculate generator loss
@@ -97,9 +93,7 @@ class BaseModel(nn.Module):
     def set_input(self, input):
         self.real_A = self.scale_by * input["A"].to(self.config.device)
         self.real_B = self.scale_by * input["B"].to(self.config.device)
-        self.dates = (
-            None if input["dates"] is None else input["dates"].to(self.config.device)
-        )
+        self.dates = None if input["dates"] is None else input["dates"].to(self.config.device)
         self.masks = input["masks"].to(self.config.device)
 
     def reset_input(self):

@@ -133,6 +133,9 @@ dmypy.json
 
 # ignore particular folders and directories
 ./util/precomputed
+./results
+./inference
+./checkpoints
 
 __pycache__/
 **/__pycache__/*

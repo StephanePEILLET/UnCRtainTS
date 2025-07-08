@@ -1,6 +1,7 @@
 import torch
-from src.backbones.convlstm import ConvLSTM
 from torch import nn
+
+from src.model.backbones.convlstm import ConvLSTM
 
 
 class FPNConvLSTM(nn.Module):
@@ -32,9 +33,7 @@ class FPNConvLSTM(nn.Module):
         """
         super().__init__()
         self.pad_value = pad_value
-        self.inconv = ConvBlock(
-            nkernels=[input_dim] + inconv, norm="group", pad_value=pad_value
-        )
+        self.inconv = ConvBlock(nkernels=[input_dim] + inconv, norm="group", pad_value=pad_value)
         self.pyramid = PyramidBlock(
             input_dim=inconv[-1],
             n_channels=n_channels,
@@ -61,14 +60,10 @@ class FPNConvLSTM(nn.Module):
             return_all_layers=False,
         )
 
-        self.outconv = nn.Conv2d(
-            in_channels=hidden_size, out_channels=num_classes, kernel_size=1
-        )
+        self.outconv = nn.Conv2d(in_channels=hidden_size, out_channels=num_classes, kernel_size=1)
 
     def forward(self, input, batch_positions=None):
-        pad_mask = (
-            (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)
-        )  # BxT pad mask
+        pad_mask = (input == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)  # BxT pad mask
         pad_mask = pad_mask if pad_mask.any() else None
 
         out = self.inconv.smart_forward(input)
@@ -102,12 +97,7 @@ class TemporallySharedBlock(nn.Module):
             if self.pad_value is not None:
                 pad_mask = (out == self.pad_value).all(dim=-1).all(dim=-1).all(dim=-1)
                 if pad_mask.any():
-                    temp = (
-                        torch.ones(
-                            self.out_shape, device=input.device, requires_grad=False
-                        )
-                        * self.pad_value
-                    )
+                    temp = torch.ones(self.out_shape, device=input.device, requires_grad=False) * self.pad_value
                     temp[~pad_mask] = self.forward(out[~pad_mask])
                     out = temp
                 else:
@@ -161,10 +151,7 @@ class PyramidBlock(TemporallySharedBlock):
         out = torch.cat(
             [
                 out,
-                global_avg_pool.unsqueeze(-1)
-                .repeat(1, 1, h)
-                .unsqueeze(-1)
-                .repeat(1, 1, 1, w),
+                global_avg_pool.unsqueeze(-1).repeat(1, 1, h).unsqueeze(-1).repeat(1, 1, 1, w),
             ],
             dim=1,
         )
@@ -184,6 +171,7 @@ class ConvLayer(nn.Module):
 
             def nl(num_feats):
                 return nn.GroupNorm(num_channels=num_feats, num_groups=n_groups)
+
         else:
             nl = None
         for i in range(len(nkernels) - 1):

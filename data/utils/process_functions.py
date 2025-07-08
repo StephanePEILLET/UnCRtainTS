@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 from rasterio.io import DatasetReader
 from scipy.ndimage import gaussian_filter
 
-from util.detect_cloudshadow import get_cloud_mask, get_shadow_mask
+from utils_misc.detect_cloudshadow import get_cloud_mask, get_shadow_mask
 
 # Type aliases for better readability
 ImageArray = NDArray[np.float32]
@@ -33,10 +33,6 @@ def to_date(date_string: str) -> datetime:
         datetime.datetime(2020, 1, 1, 0, 0)
     """
     return datetime.strptime(date_string, "%Y-%m-%d")
-
-
-# Sentinel-1 launch date as reference point
-S1_LAUNCH: datetime = to_date("2014-04-03")
 
 
 def read_tif(img_path: Union[str, Path]) -> DatasetReader:

@@ -4,24 +4,65 @@ import time
 import torch
 import torchnet as tnt
 from matplotlib import pyplot as plt
-from src.learning.metrics import avg_img_metrics, img_metrics
 from tqdm import tqdm
 
-from model.logger import (
+from src.logger import (
     export,
     log_aleatoric,
     log_train,
 )
-from model.metrics import (
+from src.metrics import (
     compute_ece,
     compute_uce_auce,
 )
-from model.plot import (
+from src.model.learning.metrics import avg_img_metrics, img_metrics
+from src.plot import (
     discrete_matshow,
     plot_discard,
     plot_img,
 )
-from model.prepare import prepare_data
+from src.utils_training import recursive_todevice
+
+
+def prepare_data(batch, device, config):
+    if config.get("pretrain", False):
+        return prepare_data_mono(batch, device, config)
+    else:
+        return prepare_data_multi(batch, device, config)
+
+
+def prepare_data_mono(batch, device, config):
+    x = batch["input"]["S2"].to(device).unsqueeze(1)
+    if config.use_sar:
+        x = torch.cat((batch["input"]["S1"].to(device).unsqueeze(1), x), dim=2)
+    m = batch["input"]["masks"].to(device).unsqueeze(1)
+    y = batch["target"]["S2"].to(device).unsqueeze(1)
+    dates = None  # no dates for pre-training
+    return x, y, m, dates
+
+
+def prepare_data_multi(batch, device, config):
+    in_S2 = recursive_todevice(batch["input"]["S2"], device)
+    in_S2_td = recursive_todevice(batch["input"]["S2 TD"], device)
+    if config.batch_size > 1:
+        in_S2_td = torch.stack(in_S2_td).T
+    in_m = recursive_todevice(batch["input"]["masks"], device).swapaxes(0, 1)  # .squeeze(2)
+    target_S2 = recursive_todevice(batch["target"]["S2"], device)
+    y = target_S2  # torch.cat(target_S2, dim=0).unsqueeze(1)
+
+    if config.data.use_sar:
+        in_S1 = recursive_todevice(batch["input"]["S1"], device)
+        in_S1_td = recursive_todevice(batch["input"]["S1 TD"], device)
+        if config.batch_size > 1:
+            in_S1_td = torch.stack(in_S1_td).T
+        x = torch.cat([in_S1, in_S2], dim=2)  # torch.cat((torch.stack(in_S1, dim=1), torch.stack(in_S2, dim=1)), dim=2)
+        dates = torch.cat([in_S1_td, in_S2_td]).type(torch.float64).mean().to(device)
+        # dates = torch.stack((torch.tensor(in_S1_td), torch.tensor(in_S2_td))).float().mean(dim=0).to(device)
+    else:
+        x = torch.stack(in_S2, dim=1)
+        dates = torch.tensor(in_S2_td).float().to(device)
+
+    return x, y, in_m, dates
 
 
 def iterate(
@@ -46,15 +87,9 @@ def iterate(
 
     t_start = time.time()
     for i, batch in enumerate(tqdm(data_loader)):
-        step = (epoch - 1) * len(data_loader) + i
 
-        if config.sample_type == "cloudy_cloudfree":
-            x, y, in_m, dates = prepare_data(batch, device, config)
-        elif config.sample_type == "pretrain":
-            x, y, in_m = prepare_data(batch, device, config)
-            dates = None
-        else:
-            raise NotImplementedError
+        step = (epoch - 1) * len(data_loader) + i
+        x, y, in_m, dates = prepare_data(batch, config=config, device=torch.device(config.device))
         inputs = {"A": x, "B": y, "dates": dates, "masks": in_m}
 
         if mode != "train":  # val or test

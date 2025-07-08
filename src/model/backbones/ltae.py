@@ -2,8 +2,9 @@ import copy
 
 import numpy as np
 import torch
-from src.backbones.positional_encoding import PositionalEncoder
 from torch import nn
+
+from src.model.backbones.positional_encoding import PositionalEncoder
 
 
 class LTAE2d(nn.Module):
@@ -52,15 +53,11 @@ class LTAE2d(nn.Module):
         assert self.mlp[0] == self.d_model
 
         if positional_encoding:
-            self.positional_encoder = PositionalEncoder(
-                self.d_model // n_head, T=T, repeat=n_head
-            )
+            self.positional_encoder = PositionalEncoder(self.d_model // n_head, T=T, repeat=n_head)
         else:
             self.positional_encoder = None
 
-        self.attention_heads = MultiHeadAttention(
-            n_head=n_head, d_k=d_k, d_in=self.d_model, use_dropout=use_dropout
-        )
+        self.attention_heads = MultiHeadAttention(n_head=n_head, d_k=d_k, d_in=self.d_model, use_dropout=use_dropout)
         self.in_norm = nn.GroupNorm(
             num_groups=n_head,
             num_channels=self.in_channels,
@@ -86,15 +83,8 @@ class LTAE2d(nn.Module):
     def forward(self, x, batch_positions=None, pad_mask=None, return_comp=False):
         sz_b, seq_len, d, h, w = x.shape
         if pad_mask is not None:
-            pad_mask = (
-                pad_mask.unsqueeze(-1)
-                .repeat((1, 1, h))
-                .unsqueeze(-1)
-                .repeat((1, 1, 1, w))
-            )  # BxTxHxW
-            pad_mask = (
-                pad_mask.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
-            )
+            pad_mask = pad_mask.unsqueeze(-1).repeat((1, 1, h)).unsqueeze(-1).repeat((1, 1, 1, w))  # BxTxHxW
+            pad_mask = pad_mask.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
 
         out = x.permute(0, 3, 4, 1, 2).contiguous().view(sz_b * h * w, seq_len, d)
         out = self.in_norm(out.permute(0, 2, 1)).permute(0, 2, 1)
@@ -103,12 +93,7 @@ class LTAE2d(nn.Module):
             out = self.inconv(out.permute(0, 2, 1)).permute(0, 2, 1)
 
         if self.positional_encoder is not None:
-            bp = (
-                batch_positions.unsqueeze(-1)
-                .repeat((1, 1, h))
-                .unsqueeze(-1)
-                .repeat((1, 1, 1, w))
-            )  # BxTxHxW
+            bp = batch_positions.unsqueeze(-1).repeat((1, 1, h)).unsqueeze(-1).repeat((1, 1, 1, w))  # BxTxHxW
             bp = bp.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
             out = out + self.positional_encoder(bp)
 
@@ -118,9 +103,7 @@ class LTAE2d(nn.Module):
         #   in utae.py this is torch.Size([B, 128, 32, 32])
         out, attn = self.attention_heads(out, pad_mask=pad_mask)
 
-        out = (
-            out.permute(1, 0, 2).contiguous().view(sz_b * h * w, -1)
-        )  # Concatenate heads, out is now [B*H*W x d_in/h * h], e.g. [2048 x 256]
+        out = out.permute(1, 0, 2).contiguous().view(sz_b * h * w, -1)  # Concatenate heads, out is now [B*H*W x d_in/h * h], e.g. [2048 x 256]
 
         # out is of shape [head x b x t x h x w]
         out = self.dropout(self.mlp(out))
@@ -175,15 +158,11 @@ class LTAE2dtiny(nn.Module):
             self.inconv = None
 
         if positional_encoding:
-            self.positional_encoder = PositionalEncoder(
-                self.d_model // n_head, T=T, repeat=n_head
-            )
+            self.positional_encoder = PositionalEncoder(self.d_model // n_head, T=T, repeat=n_head)
         else:
             self.positional_encoder = None
 
-        self.attention_heads = MultiHeadAttentionSmall(
-            n_head=n_head, d_k=d_k, d_in=self.d_model
-        )
+        self.attention_heads = MultiHeadAttentionSmall(n_head=n_head, d_k=d_k, d_in=self.d_model)
         self.in_norm = nn.GroupNorm(
             num_groups=n_head,
             num_channels=self.in_channels,
@@ -192,15 +171,8 @@ class LTAE2dtiny(nn.Module):
     def forward(self, x, batch_positions=None, pad_mask=None):
         sz_b, seq_len, d, h, w = x.shape
         if pad_mask is not None:
-            pad_mask = (
-                pad_mask.unsqueeze(-1)
-                .repeat((1, 1, h))
-                .unsqueeze(-1)
-                .repeat((1, 1, 1, w))
-            )  # BxTxHxW
-            pad_mask = (
-                pad_mask.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
-            )
+            pad_mask = pad_mask.unsqueeze(-1).repeat((1, 1, h)).unsqueeze(-1).repeat((1, 1, 1, w))  # BxTxHxW
+            pad_mask = pad_mask.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
 
         out = x.permute(0, 3, 4, 1, 2).contiguous().view(sz_b * h * w, seq_len, d)
         out = self.in_norm(out.permute(0, 2, 1)).permute(0, 2, 1)
@@ -209,12 +181,7 @@ class LTAE2dtiny(nn.Module):
             out = self.inconv(out.permute(0, 2, 1)).permute(0, 2, 1)
 
         if self.positional_encoder is not None:
-            bp = (
-                batch_positions.unsqueeze(-1)
-                .repeat((1, 1, h))
-                .unsqueeze(-1)
-                .repeat((1, 1, 1, w))
-            )  # BxTxHxW
+            bp = batch_positions.unsqueeze(-1).repeat((1, 1, h)).unsqueeze(-1).repeat((1, 1, 1, w))  # BxTxHxW
             bp = bp.permute(0, 2, 3, 1).contiguous().view(sz_b * h * w, seq_len)
             out = out + self.positional_encoder(bp)
 
@@ -252,9 +219,7 @@ class MultiHeadAttention(nn.Module):
         nn.init.normal_(self.fc1_k.weight, mean=0, std=np.sqrt(2.0 / (d_k)))
 
         attn_dropout = 0.1 if use_dropout else 0.0
-        self.attention = ScaledDotProductAttention(
-            temperature=np.power(d_k, 0.5), attn_dropout=attn_dropout
-        )
+        self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5), attn_dropout=attn_dropout)
 
     def forward(self, v, pad_mask=None, return_comp=False):
         d_k, d_in, n_head = self.d_k, self.d_in, self.n_head
@@ -262,32 +227,22 @@ class MultiHeadAttention(nn.Module):
         # where self.d_in=self.d_model is the output dimension of the FC-projected features
         sz_b, seq_len, _ = v.size()
 
-        q = torch.stack([self.Q for _ in range(sz_b)], dim=1).view(
-            -1, d_k
-        )  # (n*b) x d_k
+        q = torch.stack([self.Q for _ in range(sz_b)], dim=1).view(-1, d_k)  # (n*b) x d_k
 
         k = self.fc1_k(v).view(sz_b, seq_len, n_head, d_k)
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, seq_len, d_k)  # (n*b) x lk x dk
 
         if pad_mask is not None:
-            pad_mask = pad_mask.repeat(
-                (n_head, 1)
-            )  # replicate pad_mask for each head (nxb) x lk
+            pad_mask = pad_mask.repeat((n_head, 1))  # replicate pad_mask for each head (nxb) x lk
 
         # attn   is of shape [B*H*W*h, 1, T], e.g. [2*32*32*16=32768 x 1 x 4], e.g. Size([32768, 1, 4])
         # v      is of shape [B*H*W*h, T, self.d_in/h], e.g. [2*32*32*16=32768 x 4 x 256/16=16], e.g. Size([32768, 4, 16])
         # output is of shape [B*H*W*h, 1, h], e.g. [2*32*32*16=32768 x 1 x 16], e.g. Size([32768, 1, 16])
-        v = torch.stack(v.split(v.shape[-1] // n_head, dim=-1)).view(
-            n_head * sz_b, seq_len, -1
-        )
+        v = torch.stack(v.split(v.shape[-1] // n_head, dim=-1)).view(n_head * sz_b, seq_len, -1)
         if return_comp:
-            output, attn, comp = self.attention(
-                q, k, v, pad_mask=pad_mask, return_comp=return_comp
-            )
+            output, attn, comp = self.attention(q, k, v, pad_mask=pad_mask, return_comp=return_comp)
         else:
-            output, attn = self.attention(
-                q, k, v, pad_mask=pad_mask, return_comp=return_comp
-            )
+            output, attn = self.attention(q, k, v, pad_mask=pad_mask, return_comp=return_comp)
 
         attn = attn.view(n_head, sz_b, 1, seq_len)
         attn = attn.squeeze(dim=2)
@@ -342,28 +297,20 @@ class MultiHeadAttentionSmall(nn.Module):
         # where self.d_in=self.d_model is the output dimension of the FC-projected features
         sz_b, seq_len, _ = v.size()
 
-        q = torch.stack([self.Q for _ in range(sz_b)], dim=1).view(
-            -1, d_k
-        )  # (n*b) x d_k
+        q = torch.stack([self.Q for _ in range(sz_b)], dim=1).view(-1, d_k)  # (n*b) x d_k
 
         k = self.fc1_k(v).view(sz_b, seq_len, n_head, d_k)
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, seq_len, d_k)  # (n*b) x lk x dk
 
         if pad_mask is not None:
-            pad_mask = pad_mask.repeat(
-                (n_head, 1)
-            )  # replicate pad_mask for each head (nxb) x lk
+            pad_mask = pad_mask.repeat((n_head, 1))  # replicate pad_mask for each head (nxb) x lk
 
         # attn   is of shape [B*H*W*h, 1, T], e.g. [2*32*32*16=32768 x 1 x 4], e.g. Size([32768, 1, 4])
         # v      is of shape [B*H*W*h, T, self.d_in/h], e.g. [2*32*32*16=32768 x 4 x 256/16=16], e.g. Size([32768, 4, 16])
         # output is of shape [B*H*W*h, 1, h], e.g. [2*32*32*16=32768 x 1 x 16], e.g. Size([32768, 1, 16])
-        v = torch.stack(v.split(v.shape[-1] // n_head, dim=-1)).view(
-            n_head * sz_b, seq_len, -1
-        )
+        v = torch.stack(v.split(v.shape[-1] // n_head, dim=-1)).view(n_head * sz_b, seq_len, -1)
         if weight_v:
-            output, attn = self.attention(
-                q, k, v, pad_mask=pad_mask, return_comp=return_comp, weight_v=weight_v
-            )
+            output, attn = self.attention(q, k, v, pad_mask=pad_mask, return_comp=return_comp, weight_v=weight_v)
             if return_comp:
                 output, attn, comp = self.attention(
                     q,
@@ -374,9 +321,7 @@ class MultiHeadAttentionSmall(nn.Module):
                     weight_v=weight_v,
                 )
         else:
-            attn = self.attention(
-                q, k, v, pad_mask=pad_mask, return_comp=return_comp, weight_v=weight_v
-            )
+            attn = self.attention(q, k, v, pad_mask=pad_mask, return_comp=return_comp, weight_v=weight_v)
 
         attn = attn.view(n_head, sz_b, 1, seq_len)
         attn = attn.squeeze(dim=2)

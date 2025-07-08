@@ -2,14 +2,8 @@ import os
 
 import torch
 
-sub_dir = os.path.join(os.getcwd(), "model")
-if os.path.isdir(sub_dir):
-    os.chdir(sub_dir)
-
-from src.backbones import base_model, uncrtaints, utae
-
-S1_BANDS = 2
-S2_BANDS = 13
+from data.constants.circa_constants import S1_BANDS, S2_BANDS
+from src.model.backbones import base_model, uncrtaints, utae
 
 
 def get_base_model(config):
@@ -21,7 +15,7 @@ def get_base_model(config):
 def get_generator(config):
     if "unet" in config.model:
         model = utae.UNet(
-            input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+            input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
             encoder_widths=config.encoder_widths,
             decoder_widths=config.decoder_widths,
             out_conv=config.out_conv,
@@ -43,7 +37,7 @@ def get_generator(config):
         if config.pretrain:
             # on monotemporal data, just use a simple U-Net
             model = utae.UNet(
-                input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+                input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
                 encoder_widths=config.encoder_widths,
                 decoder_widths=config.decoder_widths,
                 out_conv=config.out_conv,
@@ -63,7 +57,7 @@ def get_generator(config):
             )
         else:
             model = utae.UTAE(
-                input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+                input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
                 encoder_widths=config.encoder_widths,
                 decoder_widths=config.decoder_widths,
                 out_conv=config.out_conv,
@@ -89,7 +83,7 @@ def get_generator(config):
             )
     elif "uncrtaints" == config.model:
         model = uncrtaints.UNCRTAINTS(
-            input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+            input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
             encoder_widths=config.encoder_widths,
             decoder_widths=config.decoder_widths,
             out_conv=config.out_conv,
@@ -109,7 +103,7 @@ def get_generator(config):
             separate_out=config.separate_out,
             use_v=config.use_v,
             block_type=config.block_type,
-            is_mono=config.pretrain,
+            is_mono=config.get("pretrained", False),
         )
     else:
         raise NotImplementedError
@@ -151,7 +145,7 @@ def load_model(config, model, train_out_layer=True, load_out_partly=True):
         model.netG.load_state_dict(pretrained_dict, strict=True)
         freeze_layers(model.netG, grad=True)  # set all weights to trainable, no need to freeze
         model.frozen, freeze_these = False, []  # ... as all weights match appropriately
-    except:  # if some weights don't match (e.g. when loading from pre-trained U-Net), then only load the compatible subset ...
+    except Exception:  # if some weights don't match (e.g. when loading from pre-trained U-Net), then only load the compatible subset ...
         #     ... freeze compatible weights and make the incompatibel weights trainable
 
         # load output layer partly, e.g. when pretrained net has 3 output channels but novel model has 13
@@ -218,7 +212,7 @@ def load_checkpoint(config, checkp_dir, model, name):
 
     try:  # try loading checkpoint strictly, all weights & their names must match
         model.load_state_dict(checkpoint, strict=True)
-    except:
+    except Exception:
         # rename keys
         #   in_block1 -> in_block0, out_block1 -> out_block0
         checkpoint_renamed = dict()
