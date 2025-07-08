@@ -27,6 +27,7 @@ from src.trainer import iterate
 from src.utils_training import seed_packages, seed_worker
 from utils_misc import config_utils
 
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 def main():
     config = parse_config(mode="train")

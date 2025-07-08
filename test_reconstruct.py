@@ -29,6 +29,8 @@ from train_reconstruct import (
 )
 from utils_misc import config_utils
 
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
 test_config = parse_config(mode="test")
 # grab the PID so we can look it up in the logged config for server-side process management
 test_config.pid = os.getpid()

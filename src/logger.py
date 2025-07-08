@@ -82,9 +82,19 @@ def log_train(writer, config, model, step, x, out, y, in_m, name="", var=None):
         writer.add_image(f"Img/train/{name}in_s2", x[0, :, [5, 4, 3], ...], step, dataformats="NCHW")
     else:
         writer.add_image(f"Img/train/{name}in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW")
-    writer.add_image(f"Img/train/{name}out", out[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-    writer.add_image(f"Img/train/{name}y", y[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-    writer.add_image(f"Img/train/{name}m", in_m[0, :, None, ...], step, dataformats="NCHW")
+
+    if len(y.shape) == 4:  # if output is [B x 1 X C x H x W] ici 1 = T
+        y = y.unsqueeze(1)  # make it [B x C x H x W] for visualization
+    if len(in_m.shape) == 5:
+        in_m = in_m.squeeze(2)
+    # print(y.shape, out.shape, in_m.shape)
+    a = out[0, 0, [3, 2, 1], ...]
+    b = y[0, 0, [3, 2, 1], ...]
+    c = in_m[0, :, None, ...]  # add channel dimension for visualization
+    # print(a.shape, b.shape, c.shape)
+    writer.add_image(f"Img/train/{name}out", a, step, dataformats="CHW")
+    writer.add_image(f"Img/train/{name}y", b, step, dataformats="CHW")
+    writer.add_image(f"Img/train/{name}m", c, step, dataformats="NCHW")
 
     # analyse cloud coverage
 
@@ -101,7 +111,7 @@ def log_train(writer, config, model, step, x, out, y, in_m, name="", var=None):
 
     and_m_gray = in_m.float().mean(axis=1).cpu()
     for bdx, img in enumerate(and_m_gray):
-        fig = discrete_matshow(img, n_colors=config.input_t)
+        fig = discrete_matshow(img, n_colors=config.data.n_input_samples)
         writer.add_figure(f"Img/train/temp overlay m {bdx}", fig, step)
 
     if var is not None:

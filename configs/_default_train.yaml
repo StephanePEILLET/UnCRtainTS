@@ -47,7 +47,6 @@ scale_by: 1.0                        # rescale data within model, e.g. to [0,10]
 separate_out: false                  # whether to separately process mean and variance predictions or in a shared layer
 
 # Training parameters
-
 loss: l2                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
 resume_from: false                    # Resume training acc. to JSON in --experiment_name and *.pth chckp in --trained_checkp
 unfreeze_after: 0                     # When to unfreeze ALL weights for training
