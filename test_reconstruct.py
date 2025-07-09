@@ -45,7 +45,7 @@ targ_s2 = [f"ROIs1868/73/S2/14/s2_ROIs1868_73_ImgNo_14_2018-06-21_patch_{pdx}.ti
 # load previous config from training directories
 
 # if no custom path to config file is passed, try fetching config file at default location
-conf_path = os.path.join(test_config.res_dir, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
+conf_path = os.path.join(test_config.save_dir, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if os.path.isfile(conf_path):
     with open(conf_path) as file:
         model_config = json.loads(file.read())
@@ -56,7 +56,7 @@ if os.path.isfile(conf_path):
             "device",
             "resume_at",
             "trained_checkp",
-            "res_dir",
+            "save_dir",
             "weight_folder",
             "root1",
             "root2",
@@ -84,7 +84,7 @@ config = utils.str2list(config, ["encoder_widths", "decoder_widths", "out_conv"]
 if config.pretrain:
     config.batch_size = 32
 
-experime_dir = os.path.join(config.res_dir, config.experiment_name)
+experime_dir = os.path.join(config.save_dir, config.experiment_name)
 if not os.path.exists(experime_dir):
     os.makedirs(experime_dir)
 with open(os.path.join(experime_dir, "conf.json"), "w") as file:
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     pprint.pprint(config)
 
 # instantiate tensorboard logger
-writer = SummaryWriter(os.path.join(config.res_dir, config.experiment_name))
+writer = SummaryWriter(os.path.join(config.save_dir, config.experiment_name))
 
 
 def main(config):
@@ -144,10 +144,10 @@ def main(config):
 
     save_results(
         test_img_metrics,
-        os.path.join(config.res_dir, config.experiment_name),
+        os.path.join(config.save_dir, config.experiment_name),
         split="test",
     )
-    print(f"\nLogged test metrics to path {os.path.join(config.res_dir, config.experiment_name)}")
+    print(f"\nLogged test metrics to path {os.path.join(config.save_dir, config.experiment_name)}")
 
 
 if __name__ == "__main__":

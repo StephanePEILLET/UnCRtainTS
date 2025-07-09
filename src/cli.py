@@ -27,7 +27,7 @@ INFERENCE_NO_OVERWRITE_ARGS = [
     "device",
     "resume_at",
     "trained_checkp",
-    "res_dir",
+    "save_dir",
     "weight_folder",
     "root1",
     "root2",
@@ -103,7 +103,7 @@ def handle_parameters_config(config, mode="train"):
     if config.resume_from:
         if config.experiment_name != config.trained_checkp.split("/")[-2]:
             raise ValueError("Mismatch of loaded config file and checkpoints")
-        load_conf = os.path.join(config.res_dir, config.experiment_name, "conf.json")
+        load_conf = os.path.join(config.save_dir, config.experiment_name, "conf.json")
         cfg_resume = config_utils.read_config(load_conf)
         for key in RESUME_TRAINING_NO_OVERWRITE_ARGS:
             if key in cfg_resume:

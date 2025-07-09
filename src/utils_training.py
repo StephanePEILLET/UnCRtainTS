@@ -14,9 +14,8 @@ def seed_packages(seed):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.use_deterministic_algorithms(False, warn_only=True)
     torch.backends.cudnn.benchmark = False
-    # torch.backends.cudnn.deterministic = False
 
 
 def seed_worker(worker_id):

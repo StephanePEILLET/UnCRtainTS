@@ -124,7 +124,7 @@ def save_model(config, epoch, model, name):
     }
     torch.save(
         state_dict,
-        os.path.join(config.res_dir, config.experiment_name, f"{name}.pth.tar"),
+        os.path.join(config.save_dir, config.experiment_name, f"{name}.pth.tar"),
     )
 
 

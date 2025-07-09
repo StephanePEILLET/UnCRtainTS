@@ -1,11 +1,17 @@
 model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
 experiment_name: CIRCA_experiment # Name of the current experiment
 
+# Args for debugging
+batch_size: 5
+num_workers: 12
+epochs: 2
+
 # flags specific to CIRCA
 data:
     hdf5_file: "/home/SPeillet/Downloads/data/circa_cloud_removal.hdf5"  # Path to HDF5 file containing the data
-    #hdf5_file: "/var/data/datasets/circa_cloud_removal.hdf5"
     shuffle: false                                  # Whether to shuffle the data
     use_sar: true                               # Whether to include Sentinel-1 SAR data
     channels: "all"                                # Which channels to include ('all' or specific subset)
     compute_cloud_mask: false                      # Whether to compute cloud masks on the fly
+    max_samples_count: 10        # count of data (sub-)samples to take
+    max_samples_frac: 0.01                # fraction of data (sub-)samples to take

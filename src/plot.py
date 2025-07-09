@@ -95,7 +95,7 @@ def plot_discard(writer, sorted_errors, config, mode, step, is_se=True):
     fig.tight_layout()
     writer.add_figure(f"Img/{mode}/discard_uncertain", fig, step)
     if mode == "test":  # export the final test split plots for print
-        path_to = os.path.join(config.res_dir, config.experiment_name)
+        path_to = os.path.join(config.save_dir, config.experiment_name)
         print(f"Logging discard plots to path {path_to}")
         fig.savefig(
             os.path.join(path_to, f"plot_{mode}_{metric}_discard.png"),

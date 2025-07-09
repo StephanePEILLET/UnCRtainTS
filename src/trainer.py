@@ -9,17 +9,12 @@ from tqdm import tqdm
 from data.constants.circa_constants import S2_BANDS
 from src.logger import (
     export,
-    log_aleatoric,
     log_train,
-)
-from src.metrics import (
-    compute_ece,
-    compute_uce_auce,
+    log_validate,
 )
 from src.model.learning.metrics import avg_img_metrics, img_metrics
 from src.plot import (
     discrete_matshow,
-    plot_discard,
     plot_img,
 )
 from src.utils_training import recursive_todevice
@@ -94,6 +89,8 @@ def iterate(
         inputs = {"A": x, "B": y, "dates": dates, "masks": in_m}
 
         if mode != "train":  # val or test
+            if len(y.shape) == 4:
+                y = y.unsqueeze(1)
             with torch.no_grad():
                 # compute single-model mean and variance predictions
                 model.set_input(inputs)
@@ -105,10 +102,12 @@ def iterate(
                     var = model.netG.variance
                     model.netG.variance = None
                 else:
-                    var = out[:, :, S2_BANDS:, ...]
-                out = out[:, :, :S2_BANDS, ...]
+                    var = out[:, :, s2_bands:, ...]
+                out = out[:, :, :s2_bands, ...]
                 batch_size = y.size()[0]
 
+                # print(f"Batch size: {batch_size}, Output shape: {out.shape}, Var shape: {var.shape if var is not None else 'None'}")
+                # print(f"Input shape: {x.shape}, Target shape: {y.shape}, Mask shape: {in_m.shape}")
                 for bdx in range(batch_size):
                     # only compute statistics on variance estimates if using e.g. NLL loss or combinations thereof
 
@@ -118,7 +117,8 @@ def iterate(
                             covar = var
                             # get [B x 1 x C x H x W] variance tensor
                             var = var.diagonal(dim1=2, dim2=3).moveaxis(-1, 2)
-
+                        
+                        # print(f"out bdx shape: {out[bdx].shape}, y bdx shape: {y[bdx].shape}, var shape: {var[bdx].shape}")
                         extended_metrics = img_metrics(y[bdx], out[bdx], var=var[bdx])
                         vars_aleatoric.append(extended_metrics["mean var"])
                         errs.append(extended_metrics["error"])
@@ -131,7 +131,7 @@ def iterate(
                     idx = i * batch_size + bdx  # plot and export every k-th item
                     if config.plot_every > 0 and idx % config.plot_every == 0:
                         plot_dir = os.path.join(
-                            config.res_dir,
+                            config.save_dir,
                             config.experiment_name,
                             "plots",
                             f"epoch_{epoch}",
@@ -164,7 +164,7 @@ def iterate(
                             )
                     if config.export_every > 0 and idx % config.export_every == 0:
                         export_dir = os.path.join(
-                            config.res_dir,
+                            config.save_dir,
                             config.experiment_name,
                             "export",
                             f"epoch_{epoch}",
@@ -197,7 +197,7 @@ def iterate(
                     idx = i * batch_size + bdx  # plot and export every k-th item
                     if idx % config.plot_every == 0:
                         plot_dir = os.path.join(
-                            config.res_dir,
+                            config.save_dir,
                             config.experiment_name,
                             "plots",
                             f"epoch_{epoch}",
@@ -237,41 +237,10 @@ def iterate(
         model.scheduler_G.step()
 
     if mode in {"test", "val"}:
-        # log the metrics
-
-        # log image metrics
-        for key, val in img_meter.value().items():
-            writer.add_scalar(f"{mode}/{key}", val, step)
-
-        # any loss is currently only computed within model.backward_G() at train time
-        writer.add_scalar(f"{mode}/loss", metrics[f"{mode}_loss"], step)
-
-        # use add_images for batch-wise adding across temporal dimension
-        if config.use_sar:
-            writer.add_image(f"Img/{mode}/in_s1", x[0, :, [0], ...], step, dataformats="NCHW")
-            writer.add_image(f"Img/{mode}/in_s2", x[0, :, [5, 4, 3], ...], step, dataformats="NCHW")
-        else:
-            writer.add_image(f"Img/{mode}/in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW")
-        writer.add_image(f"Img/{mode}/out", out[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-        writer.add_image(f"Img/{mode}/y", y[0, 0, [3, 2, 1], ...], step, dataformats="CHW")
-        writer.add_image(f"Img/{mode}/m", in_m[0, :, None, ...], step, dataformats="NCHW")
-
-        # compute Expected Calibration Error (ECE)
-        if config.loss in ["GNLL", "MGNLL"]:
-            sorted_errors_se = compute_ece(vars_aleatoric, errs_se, len(data_loader.dataset), percent=5)
-            sorted_errors = {"se_sortAleatoric": sorted_errors_se}
-            plot_discard(sorted_errors["se_sortAleatoric"], config, mode, step, is_se=True)
-
-            # compute ECE
-            uce_l2, auce_l2 = compute_uce_auce(vars_aleatoric, errs, len(data_loader.dataset), percent=5, l2=True, mode=mode, step=step)
-
-            # no need for a running mean here
-            img_meter.value()["UCE SE"] = uce_l2.cpu().numpy().item()
-            img_meter.value()["AUCE SE"] = auce_l2.cpu().numpy().item()
-
-        if config.loss in ["GNLL", "MGNLL"]:
-            log_aleatoric(writer, config, mode, step, var, "model/", img_meter)
-
+        img_meter = log_validate(
+            writer=writer,config=config,img_meter=img_meter,metrics=metrics,mode=mode,step=step,x=x,out=out,
+            y=y,in_m=in_m,var=var,data_loader=data_loader,errs=errs,vars_aleatoric=vars_aleatoric,errs_se=errs_se,
+        )
         return metrics, img_meter.value()
     else:
         return metrics

@@ -8,8 +8,15 @@ from src.plot import (
     continuous_matshow,
     discrete_matshow,
 )
+from src.metrics import (
+    compute_ece,
+    compute_uce_auce,
+)
+from src.plot import (
+    discrete_matshow,
+    plot_discard,
 
-
+)
 def log_aleatoric(writer, config, mode, step, var, name, img_meter=None):
     # if var is of shape [B x 1 x C x C x H x W] then it's a covariance tensor
     if len(var.shape) > 5:
@@ -66,6 +73,67 @@ def log_aleatoric(writer, config, mode, step, var, name, img_meter=None):
     if img_meter is not None:
         writer.add_scalar(f"{mode}/{name}UCE SE", img_meter.value()["UCE SE"], step)
         writer.add_scalar(f"{mode}/{name}AUCE SE", img_meter.value()["AUCE SE"], step)
+
+def log_validate(
+    writer, 
+    config, 
+    img_meter, 
+    metrics, 
+    mode, 
+    step, 
+    x, 
+    out, 
+    y, 
+    in_m, 
+    var,
+    data_loader,
+    errs,
+    vars_aleatoric,
+    errs_se,
+    ):
+    for key, val in img_meter.value().items():
+        writer.add_scalar(f"{mode}/{key}", val, step)
+
+    # any loss is currently only computed within model.backward_G() at train time
+    writer.add_scalar(f"{mode}/loss", metrics[f"{mode}_loss"], step)
+
+    # use add_images for batch-wise adding across temporal dimension
+    if config.data.use_sar:
+        writer.add_image(f"Img/{mode}/in_s1", x[0, :, [0], ...], step, dataformats="NCHW")
+        writer.add_image(f"Img/{mode}/in_s2", x[0, :, [5, 4, 3], ...], step, dataformats="NCHW")
+    else:
+        writer.add_image(f"Img/{mode}/in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW")
+
+    # Ajout sortie des images optiques 
+    if len(y.shape) == 4:  # if output is [B x 1 X C x H x W] ici 1 = T
+        y = y.unsqueeze(1)  # make it [B x C x H x W] for visualization
+    if len(in_m.shape) == 5:
+        in_m = in_m.squeeze(2)
+    # print(y.shape, out.shape, in_m.shape)
+    a = out[0, 0, [3, 2, 1], ...]
+    b = y[0, 0, [3, 2, 1], ...]
+    c = in_m[0, :, None, ...]  # add channel dimension for visualization
+
+    writer.add_image(f"Img/{mode}/out", a, step, dataformats="CHW")
+    writer.add_image(f"Img/{mode}/y", b, step, dataformats="CHW")
+    writer.add_image(f"Img/{mode}/m", c, step, dataformats="NCHW")
+
+    # compute Expected Calibration Error (ECE)
+    if config.loss in ["GNLL", "MGNLL"]:
+        sorted_errors_se = compute_ece(vars_aleatoric, errs_se, len(data_loader.dataset), percent=5)
+        sorted_errors = {"se_sortAleatoric": sorted_errors_se}
+        plot_discard(writer, sorted_errors["se_sortAleatoric"], config, mode, step, is_se=True)
+
+        # compute ECE
+        uce_l2, auce_l2 = compute_uce_auce(writer, vars_aleatoric, errs, len(data_loader.dataset), percent=5, l2=True, mode=mode, step=step)
+
+        # no need for a running mean here
+        img_meter.value()["UCE SE"] = uce_l2.cpu().numpy().item()
+        img_meter.value()["AUCE SE"] = auce_l2.cpu().numpy().item()
+
+    if config.loss in ["GNLL", "MGNLL"]:
+        log_aleatoric(writer, config, mode, step, var, "model/", img_meter)
+    return img_meter
 
 
 def log_train(writer, config, model, step, x, out, y, in_m, name="", var=None):

@@ -74,8 +74,8 @@ def main():
 
     with open(os.path.join(config.save_dir, config.experiment_name, "conf.json"), "w") as file:
         file.write(json.dumps(OmegaConf.to_container(config, resolve=True), indent=4))
-    print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
-    print(model)
+    # print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
+    # print(model)
 
     # Optimizer and Loss
     model.criterion = losses.get_loss(config)

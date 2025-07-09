@@ -7,7 +7,7 @@
 #SBATCH --hint=nomultithread         # hyperthreading desactive
 #SBATCH --mem=100G       # Memory proportional to GPUs: 32000 Cedar, 64000 Graham.
 #SBATCH --partition=jean-zellou
-#SBATCH --nodelist=DEL2212S023
+#SBATCH--nodelist=DEL2212S023
 #SBATCH -e /mnt/stores/store-DAI/tmp/speillet/logs/uncrtaints-%j.out
 #SBATCH -o /mnt/stores/store-DAI/tmp/speillet/logs/uncrtaints-%j.out
 
@@ -26,5 +26,5 @@ eval "$(conda shell.bash hook)"
 conda deactivate
 conda activate cloud_reconstruction
 
-srun --cpu-bind=none python train_reconstruct.py "/mnt/common/hdd/home/SPeillet/CIRCA.yaml" --save_dir "/mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/train"
+srun --cpu-bind=none python train_reconstruct.py "/mnt/common/hdd/home/SPeillet/UnCRtainTS/configs/slurm/CIRCA.yaml" --save_dir "/mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/train"
 echo "Job complete"
