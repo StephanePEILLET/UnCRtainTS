@@ -34,6 +34,7 @@ from data.uncrtaints_dataloader import UnCRtainTS_from_hdf5
 
 parser = create_parser(mode="test")
 test_config = parser.parse_args()
+test_config.use_sar = True
 
 # grab the PID so we can look it up in the logged config for server-side process management
 test_config.pid = os.getpid()
