@@ -8,8 +8,11 @@ import torch
 from torch import nn
 
 from data.constants.circa_constants import S2_BANDS
-from src.model.backbones.ltae import LTAE2d, LTAE2dtiny
-from src.model.backbones.utae import ConvBlock, ConvLayer, TemporallySharedBlock
+from src.model.backbones.ltae import LTAE2d
+from src.model.backbones.ltae import LTAE2dtiny
+from src.model.backbones.utae import ConvBlock
+from src.model.backbones.utae import ConvLayer
+from src.model.backbones.utae import TemporallySharedBlock
 
 
 def get_norm_layer(out_channels, num_feats, n_groups=4, layer_type="batch"):

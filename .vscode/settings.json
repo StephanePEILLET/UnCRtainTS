@@ -1,0 +1,52 @@
+{
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true,
+    "python.linting.flake8Args": [
+        "--max-line-length=120",
+        "--ignore=E501,E402,F841,F401,E302,E305",
+    ],
+    "ruff.lineLength": 200,
+    "ruff.linting.enabled": true,
+    "ruff.linting.args": [
+        "--ignore=E501,E402,F841,F401,E302,E305,I001",
+        "--select=E,W,F",
+        "--fix",
+    ],
+    "python.formatting.provider": "black",
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit",
+        "source.fixAll": "explicit"
+    },
+    "editor.rulers": [
+        200
+    ],
+    "workbench.colorCustomizations": {
+        "editorRuler.foreground": "#90C149"
+    },
+    "editor.formatOnSave": false,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "isort.args": [
+        "--profile",
+        "black",
+        "--multi-line",
+        "7",
+        "--sl"
+    ],
+    "black-formatter.args": [
+        "--line-length",
+        "200"
+    ],
+    "flake8.args": [
+        "--max-line-length",
+        "200",
+        "--extend-ignore",
+        "E203, E704"
+    ]
+}

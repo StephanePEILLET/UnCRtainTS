@@ -8,7 +8,8 @@ import torch
 from torch import nn
 
 from data.constants.circa_constants import S2_BANDS
-from src.model.backbones.convlstm import BConvLSTM, ConvLSTM
+from src.model.backbones.convlstm import BConvLSTM
+from src.model.backbones.convlstm import ConvLSTM
 from src.model.backbones.ltae import LTAE2d
 
 

@@ -1,4 +1,4 @@
-name: uncrtaints
+name: cr
 channels:
   - nvidia
   - pytorch
@@ -41,7 +41,6 @@ dependencies:
   - jupyter
   - ipywidgets
   - kornia
-  - rich
   - pip:
       - matplotlib
       - setuptools

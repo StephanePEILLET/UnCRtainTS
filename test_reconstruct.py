@@ -15,18 +15,19 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
-from src import utils
-from src.model_utils import get_model, load_checkpoint
 from src.cli import parse_config
+from src.model import utils
+
+# from src.model.utils import get_model
+# from src.model.utils import load_checkpoint
 from src.trainer import iterate
 from src.utils_training import seed_packages
-from train_reconstruct import (
-    import_from_path,
-    iterate,
-    prepare_output,
-    save_results,
-    seed_packages,
-)
+
+# from train_reconstruct import import_from_path
+from train_reconstruct import iterate
+from train_reconstruct import prepare_output
+from train_reconstruct import save_results
+from train_reconstruct import seed_packages
 from utils_misc import config_utils
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -37,49 +38,49 @@ test_config.pid = os.getpid()
 config_utils.print_config_rich(test_config)
 
 
-# related to flag --use_custom:
-# define custom target S2 patches (these will be mosaiced into a single sample), and fetch associated target S1 patches as well as input data
-# (TODO: keeping this hard-coded until a more convenient way to pass it as an argument comes about ...)
-targ_s2 = [f"ROIs1868/73/S2/14/s2_ROIs1868_73_ImgNo_14_2018-06-21_patch_{pdx}.tif" for pdx in [171, 172, 173, 187, 188, 189, 203, 204, 205]]
+# # related to flag --use_custom:
+# # define custom target S2 patches (these will be mosaiced into a single sample), and fetch associated target S1 patches as well as input data
+# # (TODO: keeping this hard-coded until a more convenient way to pass it as an argument comes about ...)
+# targ_s2 = [f"ROIs1868/73/S2/14/s2_ROIs1868_73_ImgNo_14_2018-06-21_patch_{pdx}.tif" for pdx in [171, 172, 173, 187, 188, 189, 203, 204, 205]]
 
-# load previous config from training directories
+# # load previous config from training directories
 
-# if no custom path to config file is passed, try fetching config file at default location
-conf_path = os.path.join(test_config.save_dir, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
-if os.path.isfile(conf_path):
-    with open(conf_path) as file:
-        model_config = json.loads(file.read())
-        t_args = argparse.Namespace()
-        # do not overwrite the following flags by their respective values in the config file
-        no_overwrite = [
-            "pid",
-            "device",
-            "resume_at",
-            "trained_checkp",
-            "save_dir",
-            "weight_folder",
-            "root1",
-            "root2",
-            "root3",
-            "max_samples_count",
-            "batch_size",
-            "display_step",
-            "plot_every",
-            "export_every",
-            "input_t",
-            "region",
-            "min_cov",
-            "max_cov",
-        ]
-        conf_dict = {key: val for key, val in model_config.items() if key not in no_overwrite}
-        for key, val in vars(test_config).items():
-            if key in no_overwrite:
-                conf_dict[key] = val
-        t_args.__dict__.update(conf_dict)
-        config = parser.parse_args(namespace=t_args)
-else:
-    config = test_config  # otherwise, keep passed flags without any overwriting
-config = utils.str2list(config, ["encoder_widths", "decoder_widths", "out_conv"])
+# # if no custom path to config file is passed, try fetching config file at default location
+# conf_path = os.path.join(test_config.save_dir, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
+# if os.path.isfile(conf_path):
+#     with open(conf_path) as file:
+#         model_config = json.loads(file.read())
+#         t_args = argparse.Namespace()
+#         # do not overwrite the following flags by their respective values in the config file
+#         no_overwrite = [
+#             "pid",
+#             "device",
+#             "resume_at",
+#             "trained_checkp",
+#             "save_dir",
+#             "weight_folder",
+#             "root1",
+#             "root2",
+#             "root3",
+#             "max_samples_count",
+#             "batch_size",
+#             "display_step",
+#             "plot_every",
+#             "export_every",
+#             "input_t",
+#             "region",
+#             "min_cov",
+#             "max_cov",
+#         ]
+#         conf_dict = {key: val for key, val in model_config.items() if key not in no_overwrite}
+#         for key, val in vars(test_config).items():
+#             if key in no_overwrite:
+#                 conf_dict[key] = val
+#         t_args.__dict__.update(conf_dict)
+#         config = parser.parse_args(namespace=t_args)
+# else:
+#     config = test_config  # otherwise, keep passed flags without any overwriting
+# config = utils.str2list(config, ["encoder_widths", "decoder_widths", "out_conv"])
 
 if config.pretrain:
     config.batch_size = 32

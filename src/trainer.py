@@ -7,16 +7,13 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 from data.constants.circa_constants import S2_BANDS
-from src.logger import (
-    export,
-    log_train,
-    log_validate,
-)
-from src.model.learning.metrics import avg_img_metrics, img_metrics
-from src.plot import (
-    discrete_matshow,
-    plot_img,
-)
+from src.logger import export
+from src.logger import log_train
+from src.logger import log_validate
+from src.model.learning.metrics import avg_img_metrics
+from src.model.learning.metrics import img_metrics
+from src.plot import discrete_matshow
+from src.plot import plot_img
 from src.utils_training import recursive_todevice
 
 
@@ -55,9 +52,13 @@ def prepare_data_multi(batch, device, config):
         dates = torch.cat([in_S1_td, in_S2_td]).type(torch.float64).mean().to(device)
         # dates = torch.stack((torch.tensor(in_S1_td), torch.tensor(in_S2_td))).float().mean(dim=0).to(device)
     else:
-        x = torch.stack(in_S2, dim=1)
+        # x = torch.stack(in_S2, dim=1)
+        x = in_S2
         dates = torch.tensor(in_S2_td).float().to(device)
 
+    # Shape x: [2, 3, 14, 256, 256]) BS=2 len_seq=3 channels=14 H=W=256
+    # Shape y: [2, 10, 256, 256]) BS=2 channels=10 H=W=256
+    # Shape in_m: [2, 3, 1, 256, 256]) BS=2 len_seq=3 channels=1 H=W=256
     return x, y, in_m, dates
 
 
@@ -117,7 +118,7 @@ def iterate(
                             covar = var
                             # get [B x 1 x C x H x W] variance tensor
                             var = var.diagonal(dim1=2, dim2=3).moveaxis(-1, 2)
-                        
+
                         # print(f"out bdx shape: {out[bdx].shape}, y bdx shape: {y[bdx].shape}, var shape: {var[bdx].shape}")
                         extended_metrics = img_metrics(y[bdx], out[bdx], var=var[bdx])
                         vars_aleatoric.append(extended_metrics["mean var"])
@@ -217,6 +218,12 @@ def iterate(
                 else:
                     log_train(writer, config, model, step, x, out, y, in_m)
 
+        # Detach every tensor to avoid GPU memory overload
+        x, y, in_m, dates = x.detach().cpu(), y.detach().cpu(), in_m.detach().cpu(), dates.detach().cpu()
+        del x, y, in_m, dates
+        del inputs
+        del out
+
         # log the loss, computed via model.backward_G() at train time & via model.get_loss_G() at val/test time
         loss_meter.add(model.loss_G.item())
         # after each batch, close any leftover figures
@@ -238,8 +245,21 @@ def iterate(
 
     if mode in {"test", "val"}:
         img_meter = log_validate(
-            writer=writer,config=config,img_meter=img_meter,metrics=metrics,mode=mode,step=step,x=x,out=out,
-            y=y,in_m=in_m,var=var,data_loader=data_loader,errs=errs,vars_aleatoric=vars_aleatoric,errs_se=errs_se,
+            writer=writer,
+            config=config,
+            img_meter=img_meter,
+            metrics=metrics,
+            mode=mode,
+            step=step,
+            x=x,
+            out=out,
+            y=y,
+            in_m=in_m,
+            var=var,
+            data_loader=data_loader,
+            errs=errs,
+            vars_aleatoric=vars_aleatoric,
+            errs_se=errs_se,
         )
         return metrics, img_meter.value()
     else:

@@ -2,8 +2,11 @@ import os
 
 import torch
 
-from data.constants.circa_constants import S1_BANDS, S2_BANDS
-from src.model.backbones import base_model, uncrtaints, utae
+from data.constants.circa_constants import S1_BANDS
+from data.constants.circa_constants import S2_BANDS
+from src.model.backbones import base_model
+from src.model.backbones import uncrtaints
+from src.model.backbones import utae
 
 
 def get_base_model(config):
@@ -13,9 +16,17 @@ def get_base_model(config):
 
 # for running image reconstruction
 def get_generator(config):
+    if config.data.use_sar:
+        if config.data.use_sar == "asc+desc":
+            input_dim = 2 * S1_BANDS + S2_BANDS
+        else:
+            input_dim = S1_BANDS + S2_BANDS
+    else:
+        input_dim = S2_BANDS
+
     if "unet" in config.model:
         model = utae.UNet(
-            input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
+            input_dim=input_dim,
             encoder_widths=config.encoder_widths,
             decoder_widths=config.decoder_widths,
             out_conv=config.out_conv,
@@ -37,7 +48,7 @@ def get_generator(config):
         if config.pretrain:
             # on monotemporal data, just use a simple U-Net
             model = utae.UNet(
-                input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
+                input_dim=input_dim,
                 encoder_widths=config.encoder_widths,
                 decoder_widths=config.decoder_widths,
                 out_conv=config.out_conv,
@@ -57,7 +68,7 @@ def get_generator(config):
             )
         else:
             model = utae.UTAE(
-                input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
+                input_dim=input_dim,
                 encoder_widths=config.encoder_widths,
                 decoder_widths=config.decoder_widths,
                 out_conv=config.out_conv,
@@ -83,7 +94,7 @@ def get_generator(config):
             )
     elif "uncrtaints" == config.model:
         model = uncrtaints.UNCRTAINTS(
-            input_dim=S1_BANDS * config.data.use_sar + S2_BANDS,
+            input_dim=input_dim,
             encoder_widths=config.encoder_widths,
             decoder_widths=config.decoder_widths,
             out_conv=config.out_conv,

@@ -2,7 +2,11 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict
+from typing import List
+from typing import Literal
+from typing import Optional
+from typing import Union
 
 import numpy as np
 import torch
@@ -12,12 +16,10 @@ from s2cloudless import S2PixelCloudDetector
 from torch import Tensor
 
 from data.circa_dataloader import CIRCA_from_HDF5
-from data.utils.process_functions import (
-    get_cloud_map,
-    process_MS,
-    process_SAR,
-    to_date,
-)
+from data.utils.process_functions import get_cloud_map
+from data.utils.process_functions import process_MS
+from data.utils.process_functions import process_SAR
+from data.utils.process_functions import to_date
 from data.utils.sampling_functions import sampler
 
 try:
@@ -90,6 +92,7 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
         seq_length: Optional[int] = SEN12MSCRTS_SEQ_LENGTH,
         clear_threshold: Optional[float] = CLEAR_THRESHOLD,
         vary_samples: Optional[bool] = False,  # TODO: If there is a need implement a correct way to sample TS
+        **kwargs,
     ) -> None:
         """
         Initialize the dataset with configuration parameters.
@@ -132,8 +135,11 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
         self.seq_length = seq_length
         self.time_points: range = range(self.seq_length)
         self.clear_threshold = clear_threshold
-
-        self.modalities: List[str] = ["S1", "S2"]
+        self.use_sar: bool = use_sar
+        if self.use_sar:
+            self.modalities: List[str] = ["S1", "S2"]
+        else:
+            self.modalities: List[str] = ["S2"]
         self.compute_cloud_mask: bool = compute_cloud_mask
         self.cloud_masks: CloudMaskType = cloud_masks
         self.sample_type: SampleType = sample_type if self.cloud_masks is not None else "generic"
@@ -176,11 +182,6 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
         """
         patch_data: Dict = self.etl_item(item=pdx)
 
-        # Extract SAR data and dates
-        s1: NDArray = patch_data["S1"]["S1"]  # T * C * H * W
-        dates_S1: List = patch_data["S1"]["S1_dates"]
-        s1_td: List[int] = [(d - self.ref_date).days for d in dates_S1]
-
         # Extract optical data and dates
         s2: NDArray = patch_data["S2"]["S2"]  # T * C * H * W
         dates_S2: List = patch_data["S2"]["S2_dates"]
@@ -195,19 +196,28 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
 
         coverage: List[float] = masks.mean(dim=(1, 2, 3)).tolist()
 
-        # Process and normalize data
-        s1 = np.asarray([process_SAR(img, self.method) for img in s1])
+        if self.use_sar:
+            # Extract SAR data and dates
+            s1: NDArray = patch_data["S1"]["S1"]  # T * C * H * W
+            dates_S1: List = patch_data["S1"]["S1_dates"]
+            s1_td: List[int] = [(d - self.ref_date).days for d in dates_S1]
+            # Process and normalize data
+            s1 = np.asarray([process_SAR(img, self.method) for img in s1])
+
         s2 = np.asarray([process_MS(img, self.method) for img in s2])
 
         if self.sample_type == "generic":
-            return {
-                "S1": s1,
+            sample = {
                 "S2": [process_MS(img, self.method) for img in s2],
                 "masks": masks,
                 "coverage": coverage,
-                "S1 TD": s1_td,
                 "S2 TD": s2_td,
             }
+            if self.use_sar:
+                sample["S1"] = [process_SAR(img, self.method) for img in s1]
+                sample["S1 TD"] = s1_td
+            return sample
+
         elif self.sample_type == "cloudy_cloudfree":
             # Sample cloud-free and cloudy dates
             inputs_idx: NDArray
@@ -224,32 +234,36 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
                 clear_tresh=self.clear_threshold,
             )
 
-            # Prepare input and target data
-            input_s1: Tensor = torch.from_numpy(s1[inputs_idx])
             input_s2: Tensor = torch.from_numpy(s2[inputs_idx])
             input_masks: Tensor = masks[inputs_idx]
-            target_s1: Tensor = torch.from_numpy(s1[cloudless_idx])
             target_s2: Tensor = torch.from_numpy(s2[cloudless_idx])
             target_mask: Tensor = masks[cloudless_idx]
 
-            return {
+            sample = {
                 "input": {
-                    "S1": input_s1,
                     "S2": input_s2,
                     "masks": input_masks,
                     "coverage": input_masks.mean(dim=(1, 2, 3)).tolist(),
-                    "S1 TD": [s1_td[idx] for idx in inputs_idx],
                     "S2 TD": [s2_td[idx] for idx in inputs_idx],
                     "idx": inputs_idx,
                 },
                 "target": {
-                    "S1": target_s1,
                     "S2": target_s2,
                     "masks": target_mask,
                     "coverage": target_mask.mean(dim=(1, 2)).tolist(),
-                    "S1 TD": [s1_td[cloudless_idx]],
                     "S2 TD": [s2_td[cloudless_idx]],
                     "idx": cloudless_idx,
                 },
                 "coverage bin": coverage_match,
             }
+            # Prepare input and target data
+            if self.use_sar:
+                input_s1: Tensor = torch.from_numpy(s1[inputs_idx])
+                target_s1: Tensor = torch.from_numpy(s1[cloudless_idx])
+
+                sample["input"]["S1"] = input_s1
+                sample["input"]["S1 TD"] = [s1_td[idx] for idx in inputs_idx]
+                sample["target"]["S1"] = target_s1
+                sample["target"]["S1 TD"] = [s1_td[cloudless_idx]]
+
+            return sample

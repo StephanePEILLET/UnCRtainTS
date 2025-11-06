@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}"
+        },
+        {
+            "name": "Train UnCRtainTS",
+            "type": "debugpy",
+            "request": "launch",
+            "preLaunchTask": "clean_training",
+            "program": "train_reconstruct.py",
+            "console": "integratedTerminal",
+            "args": [
+                "./configs/CIRCA.yaml",
+                "--save_dir",
+                "/DATA_10TB/data_rpg/outputs/UnCRtainTS/train",
+            ]
+        },
+        {
+            "name": "Inference UnCRtainTS",
+            "type": "debugpy",
+            "request": "launch",
+            "preLaunchTask": "clean_inference",
+            "program": "test_reconstruct.py",
+            "console": "integratedTerminal",
+            "args": [
+                "./configs/CIRCA.yaml",
+                "--save_dir",
+                "/DATA_10TB/data_rpg/outputs/UnCRtainTS/inference",
+            ]
+        },
+        {
+            "name": "test reconstruct",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "model/test_reconstruct.py ",
+            "console": "integratedTerminal",
+            "args": "--experiment_name utae --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/inference --weight_folder /media/DATA/ADeWit/3STR/models --hdf5_file /media/DATA/ADeWit/3STR/dataset/toy_circa_ligth_0.5.hdf5"
+        }
+    ]
+}
+//
+// python train_reconstruct.py "./configs/CIRCA.yaml" --save_dir "/mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/train"

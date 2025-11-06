@@ -11,13 +11,13 @@ data:
     cloud_masks: "s2cloudless_mask"                # Type of cloud mask to use [cloud_cloudshadow_mask | s2cloudless_map | s2cloudless_mask]
     sample_type: "cloudy_cloudfree"                # Sampling strategy ('generic' or 'cloudy_cloudfree')
     sampler: "fixed"                               # Sampler type ('fixed', 'random', or 'stratified')
-    n_input_samples: 4                             # Number of input samples to use
+    n_input_samples: 3                             # Number of input samples to use
     rescale_method: "default"                      # Method for rescaling data ('default', 'minmax', or 'standard')
     min_cov: 0.0                                   # Minimum cloud coverage threshold (0-1)
     max_cov: 1.0                                   # Maximum cloud coverage threshold (0-1)
     ref_date: "2014-04-03"               # reference date for Sentinel observations
     max_samples_count: 1000000000        # count of data (sub-)samples to take
-    max_samples_frac: 1.0                # fraction of data (sub-)samples to take
+    max_samples_frac: null                # fraction of data (sub-)samples to take
     vary_samples: false
 
 # Model parameters
@@ -34,7 +34,7 @@ padding_mode: reflect
 pad_value: 0.0
 
 # Attention-specific parameters
-n_head: 16                            # default value of 16, 4 for debugging
+n_head: 4                            # default value of 16, 4 for debugging
 d_model: 256                          # layers in L-TAE, default value of 256
 positional_encoding: false            # whether to use positional encoding or not
 d_k: 4
@@ -51,15 +51,15 @@ loss: MGNLL                           # Image reconstruction loss to utilize [l1
 resume_from: false                    # Resume training acc. to JSON in --experiment_name and *.pth chckp in --trained_checkp
 unfreeze_after: 0                     # When to unfreeze ALL weights for training
 epochs: 2                            # Number of epochs to train
-batch_size: 2                         # Batch size
-chunk_size: null                      # Size of vmap batches, this can be adjusted to accommodate for additional memory needs
+batch_size: 1                         # Batch size
+chunk_size: 2                      # Size of vmap batches, this can be adjusted to accommodate for additional memory needs
 lr:  0.01                             # Learning rate, e.g. 0.01
 gamma: 1.0                            # Learning rate decay parameter for scheduler
 val_every: 1.0                        # Interval in epochs between two validation steps
 val_after: 0                          # Do validation only after that many epochs
 
 # Set-up parameters
-num_workers: 0                        # Number of data loading workers
+num_workers: 8                        # Number of data loading workers
 rdm_seed: 1                           # Random seed
 device: cuda                          # Name of device to use for tensor computations (cuda/cpu)
 display_step: 10                      # Interval in batches between display of training metrics

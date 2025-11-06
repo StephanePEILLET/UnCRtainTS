@@ -7,6 +7,16 @@ from torch.nn import functional as F
 np_str_obj_array_pattern = re.compile(r"[SaUO]")
 
 
+# map arg string of written list to list
+def str2list(config, list_args):
+    for k, v in vars(config).items():
+        if k in list_args and v is not None and isinstance(v, str):
+            v = v.replace("[", "")
+            v = v.replace("]", "")
+            config.__setattr__(k, list(map(int, v.split(","))))
+    return config
+
+
 def pad_tensor(x, length, pad_value=0):
     padlen = length - x.shape[0]
     pad = [0 for _ in range(2 * len(x.shape[1:]))] + [0, padlen]
