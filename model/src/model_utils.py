@@ -7,8 +7,8 @@ if os.path.isdir(sub_dir):
     os.chdir(sub_dir)
 from src.backbones import base_model, uncrtaints, utae
 
-S1_BANDS = 2
-S2_BANDS = 13
+S1_BANDS = 4
+S2_BANDS = 10
 
 
 def get_base_model(config):

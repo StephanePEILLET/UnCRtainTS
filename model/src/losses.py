@@ -8,7 +8,7 @@ from torch import nn, vmap
 from torch.nn.modules.loss import _Loss
 from torch.overrides import handle_torch_function, has_torch_function_variadic
 
-S2_BANDS = 13
+S2_BANDS = 10
 
 
 def get_loss(config):

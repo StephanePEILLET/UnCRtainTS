@@ -28,15 +28,13 @@ from train_reconstruct import (
     seed_packages,
 )
 
-from data.dataLoader import SEN12MSCR, SEN12MSCRTS, get_pairedS1
-from dataloader_CIRCA.datasets.CIRCA_dataset_for_UnCRtainTS import CircaPatchDataSetForUnCRtainTS
+from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
+from dataloader_CIRCA_old.datasets.CIRCA_dataset_for_UnCRtainTS import CircaPatchDataSetForUnCRtainTS
 
 parser = create_parser(mode="test")
 test_config = parser.parse_args()
 test_config.pid = os.getpid()
 
-# related to flag --use_custom:
-# define custom target S2 patches (these will be mosaiced into a single sample), and fetch associated target S1 patches as well as input data
 targ_s2 = [
     f"ROIs1868/73/S2/14/s2_ROIs1868_73_ImgNo_14_2018-06-21_patch_{pdx}.tif"
     for pdx in [171, 172, 173, 187, 188, 189, 203, 204, 205]
@@ -105,31 +103,10 @@ if __name__ == "__main__":
 writer = SummaryWriter(os.path.join(config.res_dir, config.experiment_name))
 
 
-if config.use_custom:
-    print("Testing on custom data samples")
-    # define a dictionary for the custom sample, with customized ROI and time points
-    custom = [
-        {
-            "input": {
-                "S1": [
-                    get_pairedS1(targ_s2, config.root1, mod="s1", time=tdx)
-                    for tdx in range(0, 3)
-                ],
-                "S2": [
-                    get_pairedS1(targ_s2, config.root1, mod="s2", time=tdx)
-                    for tdx in range(0, 3)
-                ],
-            },
-            "target": {
-                "S1": [get_pairedS1(targ_s2, config.root1, mod="s1")],
-                "S2": [targ_s2],
-            },
-        }
-    ]
-
 
 def main(config):
     device = torch.device(config.device)
+    config.use_sar = True
     prepare_output(config)
 
     model = get_model(config)
@@ -140,7 +117,7 @@ def main(config):
 
     # get data loader
 
-    circa_path = Path('/media/store-dai/projets/pac/3str/EXP_2')
+    circa_path = Path('/mnt/stores/store-dai/projets/pac/3str/EXP_2')
     data_raster = circa_path / 'Data_Raster'
     input_t = 3
     print(f"Chemin CIRCA: {circa_path}")
@@ -152,15 +129,39 @@ def main(config):
     if not circa_path.exists():
         print(f"❌ Le répertoire {circa_path} n'existe pas")
     
+    S1_LAUNCH: str = "2014-04-03"
+    SEN12MSCRTS_SEQ_LENGTH: int = 30  # Length of the Sentinel time series
+    CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
+
+    circa_ds = UnCRtainTS_CIRCA_Adapter(
+        phase="test",
+        hdf5_file= "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5",
+        shuffle=False,
+        use_sar="mix_closest",
+        channels= "all",
+        compute_cloud_mask=False,
+        # paramaters specific to UnCRtainTS
+        cloud_masks= "s2cloudless_mask",
+        sample_type= "cloudy_cloudfree",
+        sampler= "fixed",
+        n_input_samples=input_t,
+        rescale_method= "default",
+        min_cov= 0.0,
+        max_cov= 1.0,
+        ref_date= S1_LAUNCH,
+        seq_length=30, #TODO comment rendre cela adaptatif à la donnée ? 
+        clear_threshold=CLEAR_THRESHOLD,
+        vary_samples=False, 
+    )
+
     # Essayer de créer le dataset CIRCA
-    circa_ds = CircaPatchDataSetForUnCRtainTS(
-        data_optique=optique_path,
-        data_radar=radar_path,
-        patch_size=256,
-        overlap=0,
-    ) #custom_samples=None if not config.use_custom else custom,
-    #split ="test"
-    #import_data_path=imported_path,
+    # circa_ds = CircaPatchDataSetForUnCRtainTS(
+    #     data_optique=optique_path,
+    #     data_radar=radar_path,
+    #     patch_size=256,
+    #     overlap=0,
+    #     load_dataset="datasetCIRCAUnCRtainTS.csv",
+    # )
 
     dt_test = torch.utils.data.Subset(
         circa_ds, range(0, min(config.max_samples_count, len(circa_ds)))
@@ -176,7 +177,27 @@ def main(config):
 
     # Load weights
     ckpt_n = f"_epoch_{config.resume_at}" if config.resume_at > 0 else ""
-    load_checkpoint(config, config.weight_folder, model, f"model{ckpt_n}")
+    # load_checkpoint(config, config.weight_folder, model, f"model{ckpt_n}")
+
+    chckp_path = os.path.join(config.weight_folder, config.experiment_name, f"model.pth.tar")
+    print(f"Loading checkpoint {chckp_path}")
+    checkpoint = torch.load(chckp_path, map_location=config.device)["state_dict"]
+
+    try:  # try loading checkpoint strictly, all weights & their names must match
+        model.load_state_dict(checkpoint, strict=True)
+        print("Loaded checkpoint with matching keys")
+    except:
+        # rename keys
+        #   in_block1 -> in_block0, out_block1 -> out_block0
+        checkpoint_renamed = dict()
+        for key, val in checkpoint.items():
+            if "in_block" in key or "out_block" in key:
+                strs = key.split(".")
+                strs[1] = strs[1][:-1] + str(int(strs[1][-1]) - 1)
+                strs[1] = ".".join([strs[1][:-1], strs[1][-1]])
+                key = ".".join(strs)
+            checkpoint_renamed[key] = val
+        model.load_state_dict(checkpoint_renamed, strict=False)
 
     # Inference
     print("Testing . . .")

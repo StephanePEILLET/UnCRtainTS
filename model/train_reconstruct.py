@@ -34,15 +34,16 @@ from src.model_utils import (
     save_model,
 )
 from torch.utils.tensorboard import SummaryWriter
-
+from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
 from data.dataLoader import SEN12MSCR, SEN12MSCRTS
 
-S2_BANDS = 13
+S2_BANDS = 10
 parser = create_parser(mode="train")
 config = utils.str2list(
     parser.parse_args(), list_args=["encoder_widths", "decoder_widths", "out_conv"]
 )
-
+config.use_sar = True
+config.batch_size = 1
 if config.model in ["unet", "utae"]:
     assert len(config.encoder_widths) == len(config.decoder_widths)
     config.loss = "l2"
@@ -209,22 +210,32 @@ def prepare_data_mono(batch, device, config):
 
 
 def prepare_data_multi(batch, device, config):
+    # in_S2 shape BS * T * C * H * W
+    # in_S2_td BS * T
+    # in_m shape BS * T * C * H * W
     in_S2 = recursive_todevice(batch["input"]["S2"], device)
     in_S2_td = recursive_todevice(batch["input"]["S2 TD"], device)
     if config.batch_size > 1:
         in_S2_td = torch.stack(in_S2_td).T
-    in_m = torch.stack(recursive_todevice(batch["input"]["masks"], device)).swapaxes(
-        0, 1
-    )
+    else:
+        in_S2_td = torch.tensor(in_S2_td).unsqueeze(0)
+    # in_m = torch.stack(recursive_todevice(batch["input"]["masks"], device)).swapaxes(
+    #     0, 1
+    # )
+    in_m = recursive_todevice(batch["input"]["masks"][0].swapaxes(0, 1), device)
     target_S2 = recursive_todevice(batch["target"]["S2"], device)
-    y = torch.cat(target_S2, dim=0).unsqueeze(1)
+    y = target_S2.unsqueeze(1)
+    # y = torch.cat(target_S2, dim=0).unsqueeze(1)
 
     if config.use_sar:
         in_S1 = recursive_todevice(batch["input"]["S1"], device)
         in_S1_td = recursive_todevice(batch["input"]["S1 TD"], device)
         if config.batch_size > 1:
             in_S1_td = torch.stack(in_S1_td).T
-        x = torch.cat((torch.stack(in_S1, dim=1), torch.stack(in_S2, dim=1)), dim=2)
+        else:
+            in_S1_td = torch.tensor(in_S1_td).unsqueeze(0)
+        # x = torch.cat((torch.stack(in_S1, dim=1), torch.stack(in_S2, dim=1)), dim=2)
+        x = torch.cat([in_S1, in_S2], dim=2)
         in_S1_td = in_S1_td.detach().clone()
         in_S2_td = in_S2_td.detach().clone()
         dates = (
@@ -234,9 +245,14 @@ def prepare_data_multi(batch, device, config):
             .to(device)
         )
     else:
-        x = torch.stack(in_S2, dim=1)
+        x = in_S2
+        # x = torch.stack(in_S2, dim=1)
         dates = torch.tensor(in_S2_td).detach().clone().float().to(device)
-
+    # with use_sar is True
+    # x shape BS * T * (S1_C + S2_C) * H * W
+    # y shape BS * 1 * S2_C * H * W
+    # im_m shape BS * T * 1 * H * W
+    # dates shape BS * T
     return x, y, in_m, dates
 
 
@@ -387,14 +403,24 @@ def continuous_matshow(data, min=0, max=1):
 
 
 def iterate(model, data_loader, config, writer, mode="train", epoch=None, device=None):
-    print('COUCOU ITERATE')
+    # print('COUCOU ITERATE')
     if len(data_loader) == 0:
         raise ValueError("Received data loader with zero samples!")
     # loss meter, needs 1 meter per scalar (see https://tnt.readthedocs.io/en/latest/_modules/torchnet/meter/averagevaluemeter.html);
     loss_meter = tnt.meter.AverageValueMeter()
     img_meter = avg_img_metrics()
-    print(data_loader.dataset[0]['input'].keys())
+    # sample = data_loader.dataset[0]
+    # print(sample['input'].keys())
 
+    # print("Shapes of first batch inputs:")
+    # for key, value in sample['input'].items():
+    #     if isinstance(value, list):
+    #         print(f"  {key}: list of {len(value)} elements")
+    #     elif isinstance(value, torch.Tensor):
+    #         print(f"  {key}: {value.shape}")
+    #     else:
+    #         print(f"  {key}: {type(value)}") 
+    
     # collect sample-averaged uncertainties and errors
     errs, errs_se, errs_ae, vars_aleatoric = [], [], [], []
 
@@ -795,55 +821,124 @@ def import_from_path(split, config):
 def main(config):
     prepare_output(config)
     device = torch.device(config.device)
-
+    
+    S1_LAUNCH: str = "2014-04-03"
+    SEN12MSCRTS_SEQ_LENGTH: int = 30  # Length of the Sentinel time series
+    CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
+    input_t = 3 # potentiellement 5
+    path_hdf5_file = "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5"
+    # path_hdf5_file = "/lustre/fsn1/projects/rech/tel/uug84ql/datasets/CIRCA_CR_merged.hdf5"
     # define data sets
-    if config.pretrain:  # pretrain / training on mono-temporal data
-        dt_train = SEN12MSCR(
-            os.path.expanduser(config.root3),
-            split="train",
-            region=config.region,
-            sample_type=config.sample_type,
-        )
-        dt_val = SEN12MSCR(
-            os.path.expanduser(config.root3),
-            split="val",
-            region=config.region,
-            sample_type=config.sample_type,
-        )
-        dt_test = SEN12MSCR(
-            os.path.expanduser(config.root3),
-            split="test",
-            region=config.region,
-            sample_type=config.sample_type,
-        )
-    else:
-        dt_train = SEN12MSCRTS(
-            os.path.expanduser(config.root1),
-            split="train",
-            region=config.region,
-            sample_type=config.sample_type,
-            sampler="random" if config.vary_samples else "fixed",
-            n_input_samples=config.input_t,
-            import_data_path=import_from_path("train", config),
-            min_cov=config.min_cov,
-            max_cov=config.max_cov,
-        )
-        dt_val = SEN12MSCRTS(
-            os.path.expanduser(config.root2),
-            split="val",
-            region="all",
-            sample_type=config.sample_type,
-            n_input_samples=config.input_t,
-            import_data_path=import_from_path("val", config),
-        )
-        dt_test = SEN12MSCRTS(
-            os.path.expanduser(config.root2),
-            split="test",
-            region="all",
-            sample_type=config.sample_type,
-            n_input_samples=config.input_t,
-            import_data_path=import_from_path("test", config),
-        )
+    dt_train = UnCRtainTS_CIRCA_Adapter(
+        phase="train",
+        hdf5_file=path_hdf5_file,
+        shuffle=True,
+        use_sar="mix_closest",
+        channels="all",
+        compute_cloud_mask=False,
+        # paramaters specific to UnCRtainTS
+        cloud_masks="s2cloudless_mask",
+        sample_type="cloudy_cloudfree",
+        sampler="fixed",
+        n_input_samples=input_t,
+        rescale_method= "default",
+        min_cov= 0.0,
+        max_cov= 1.0,
+        ref_date=S1_LAUNCH,
+        seq_length=30, #TODO comment rendre cela adaptatif à la donnée ? 
+        clear_threshold=CLEAR_THRESHOLD,
+        vary_samples=False, 
+    )
+
+    dt_val = UnCRtainTS_CIRCA_Adapter(
+        phase="val",
+        hdf5_file=path_hdf5_file,
+        shuffle=False,
+        use_sar="mix_closest",
+        channels="all",
+        compute_cloud_mask=False,
+        # paramaters specific to UnCRtainTS
+        cloud_masks="s2cloudless_mask",
+        sample_type="cloudy_cloudfree",
+        sampler="fixed",
+        n_input_samples=input_t,
+        rescale_method= "default",
+        min_cov= 0.0,
+        max_cov= 1.0,
+        ref_date=S1_LAUNCH,
+        seq_length=30, #TODO comment rendre cela adaptatif à la donnée ? 
+        clear_threshold=CLEAR_THRESHOLD,
+        vary_samples=False, 
+    )
+    
+    dt_test = UnCRtainTS_CIRCA_Adapter(
+        phase="test",
+        hdf5_file=path_hdf5_file,
+        shuffle=False,
+        use_sar="mix_closest",
+        channels="all",
+        compute_cloud_mask=False,
+        # paramaters specific to UnCRtainTS
+        cloud_masks="s2cloudless_mask",
+        sample_type="cloudy_cloudfree",
+        sampler="fixed",
+        n_input_samples=input_t,
+        rescale_method= "default",
+        min_cov= 0.0,
+        max_cov= 1.0,
+        ref_date=S1_LAUNCH,
+        seq_length=30, #TODO comment rendre cela adaptatif à la donnée ? 
+        clear_threshold=CLEAR_THRESHOLD,
+        vary_samples=False, 
+    )
+
+    # if config.pretrain:  # pretrain / training on mono-temporal data
+    #     dt_train = SEN12MSCR(
+    #         os.path.expanduser(config.root3),
+    #         split="train",
+    #         region=config.region,
+    #         sample_type=config.sample_type,
+    #     )
+    #     dt_val = SEN12MSCR(
+    #         os.path.expanduser(config.root3),
+    #         split="val",
+    #         region=config.region,
+    #         sample_type=config.sample_type,
+    #     )
+    #     dt_test = SEN12MSCR(
+    #         os.path.expanduser(config.root3),
+    #         split="test",
+    #         region=config.region,
+    #         sample_type=config.sample_type,
+    #     )
+    # else:
+    #     dt_train = SEN12MSCRTS(
+    #         os.path.expanduser(config.root1),
+    #         split="train",
+    #         region=config.region,
+    #         sample_type=config.sample_type,
+    #         sampler="random" if config.vary_samples else "fixed",
+    #         n_input_samples=config.input_t,
+    #         import_data_path=import_from_path("train", config),
+    #         min_cov=config.min_cov,
+    #         max_cov=config.max_cov,
+    #     )
+    #     dt_val = SEN12MSCRTS(
+    #         os.path.expanduser(config.root2),
+    #         split="val",
+    #         region="all",
+    #         sample_type=config.sample_type,
+    #         n_input_samples=config.input_t,
+    #         import_data_path=import_from_path("val", config),
+    #     )
+    #     dt_test = SEN12MSCRTS(
+    #         os.path.expanduser(config.root2),
+    #         split="test",
+    #         region="all",
+    #         sample_type=config.sample_type,
+    #         n_input_samples=config.input_t,
+    #         import_data_path=import_from_path("test", config),
+    #     )
 
     # wrap to allow for subsampling, e.g. for test runs etc
     dt_train = torch.utils.data.Subset(
