@@ -9,7 +9,7 @@ from src.backbones.ltae import LTAE2d, LTAE2dtiny
 from src.backbones.utae import ConvBlock, ConvLayer, TemporallySharedBlock
 from torch import nn
 
-S2_BANDS = 13
+S2_BANDS = 10
 
 
 def get_norm_layer(out_channels, num_feats, n_groups=4, layer_type="batch"):

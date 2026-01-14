@@ -5,6 +5,37 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}"
+        },
+        {
+            "name": "Train reconstruct",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "model/train_reconstruct.py",
+            "console": "integratedTerminal",
+            "args": "--experiment_name my_first_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/train"
+        },
+        {
+            "name": "Test reconstruct",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "model/test_reconstruct_circa.py",
+            "console": "integratedTerminal",
+            "args": "--experiment_name UnCRtainTS_bs_7_MGNLL_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/inference --weight_folder /DATA_10TB/data_rpg/outputs/UnCRtainTS/results/train"
+        },
+        {
             "name": "AFRICA test reconstruct SEN12MSCRTS",
             "type": "debugpy",
             "request": "launch",

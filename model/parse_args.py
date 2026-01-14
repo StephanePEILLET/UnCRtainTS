@@ -1,6 +1,6 @@
 import argparse
 
-S2_BANDS = 13
+S2_BANDS = 10
 
 
 def create_parser(mode="train"):

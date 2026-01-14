@@ -3,7 +3,7 @@ from fvcore.nn import FlopCountAnalysis
 from src import losses, model_utils
 from torch import nn
 
-S2_BANDS = 13
+S2_BANDS = 10
 
 
 class BaseModel(nn.Module):
