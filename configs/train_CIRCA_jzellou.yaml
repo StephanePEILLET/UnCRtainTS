@@ -1,5 +1,5 @@
 #OUTPUT PARAMETERS
-experiment_name: UnCRtainTS_bs_7_MGNLL_experiment # Name of the current experiment
+experiment_name: UnCRtainTS_bs_5_lents_7_MGNLL_experiment # Name of the current experiment
 res_dir: /mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/train
 
 #DATA PARAMETERS
