@@ -223,7 +223,7 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
             inputs_idx: NDArray
             cloudless_idx: NDArray
             coverage_match: bool
-            t_windows: int = len(coverage)
+            t_windows: List[List[int]] = np.lib.stride_tricks.sliding_window_view(np.arange(len(coverage)), window_shape=self.n_input_t).tolist()
             inputs_idx, cloudless_idx, coverage_match = sampler(
                 self.sampling,
                 t_windows,
