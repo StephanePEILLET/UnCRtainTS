@@ -23,6 +23,9 @@ sys.path.append(os.path.dirname(dirname))
 import torch
 import torchnet as tnt
 from parse_args import create_parser
+from model.src.config_utils import print_config_rich
+from omegaconf import OmegaConf
+
 from src import losses, utils
 from src.learning.metrics import avg_img_metrics, img_metrics
 from src.learning.weight_init import weight_init
@@ -732,11 +735,18 @@ def import_from_path(split, config):
 
 def main():
     parser = create_parser(mode="train")
+    args = parser.parse_args()
+    cfg_file = getattr(args, "config_file", None)
+    if cfg_file is not None and os.path.isfile(cfg_file):
+        from model.src.config_utils import read_config
+        args_conf_file = read_config(cfg_file)
+        params_conf_file = OmegaConf.to_container(args_conf_file, resolve=True)
+        args.__dict__.update(params_conf_file)
+
     config = utils.str2list(
-        parser.parse_args(), list_args=["encoder_widths", "decoder_widths", "out_conv"]
+        args, list_args=["encoder_widths", "decoder_widths", "out_conv"]
     )
-    config.use_sar = True
-    config.batch_size = 1
+    
     if config.model in ["unet", "utae"]:
         assert len(config.encoder_widths) == len(config.decoder_widths)
         config.loss = "l2"
@@ -803,8 +813,6 @@ def main():
     if config.resume_at >= 0:
         config.lr = config.lr * config.gamma**config.resume_at
 
-    from model.src.config_utils import print_config_rich
-    from omegaconf import OmegaConf
 
     config.sampler = 'random' if config.vary_samples else 'fixed'
 
@@ -824,29 +832,35 @@ def main():
     writer = SummaryWriter(
         os.path.join(os.path.dirname(config.res_dir), "logs", config.experiment_name)
     )
-
-
     prepare_output(config)
     device = torch.device(config.device)
     
     S1_LAUNCH: str = "2014-04-03"
     SEN12MSCRTS_SEQ_LENGTH: int = 30  # Length of the Sentinel time series
     CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
-    input_t = 3 # potentiellement 5
-    path_hdf5_file = "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5"
+    # input_t = 3 # potentiellement 5
+    # path_hdf5_file = "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5"
     # path_hdf5_file = "/lustre/fsn1/projects/rech/tel/uug84ql/datasets/CIRCA_CR_merged.hdf5"
+
+    input_t = config.input_t
+    path_hdf5_file = config.hdf5_file
+    if hasattr(config, "sampler") and config.sampler is not None:
+        train_sampler = config.sampler
+    else:
+        train_sampler = 'random' if config.vary_samples else 'fixed'
+
     # define data sets
     dt_train = UnCRtainTS_CIRCA_Adapter(
         phase="train",
         hdf5_file=path_hdf5_file,
-        shuffle=True,
-        use_sar="mix_closest",
-        channels="all",
+        shuffle=config.shuffle,
+        use_sar=config.use_sar,
+        channels=config.channels,
         compute_cloud_mask=False,
         # paramaters specific to UnCRtainTS
         cloud_masks="s2cloudless_mask",
-        sample_type="cloudy_cloudfree",
-        sampler='random' if config.vary_samples else 'fixed',
+        sample_type=config.sample_type,
+        sampler=train_sampler,
         n_input_samples=input_t,
         rescale_method= "default",
         min_cov= 0.0,
@@ -861,12 +875,12 @@ def main():
         phase="val",
         hdf5_file=path_hdf5_file,
         shuffle=False,
-        use_sar="mix_closest",
-        channels="all",
+        use_sar=config.use_sar,
+        channels=config.channels,
         compute_cloud_mask=False,
         # paramaters specific to UnCRtainTS
         cloud_masks="s2cloudless_mask",
-        sample_type="cloudy_cloudfree",
+        sample_type=config.sample_type,
         sampler="fixed",
         n_input_samples=input_t,
         rescale_method= "default",
@@ -882,12 +896,12 @@ def main():
         phase="test",
         hdf5_file=path_hdf5_file,
         shuffle=False,
-        use_sar="mix_closest",
-        channels="all",
+        use_sar=config.use_sar,
+        channels=config.channels,
         compute_cloud_mask=False,
         # paramaters specific to UnCRtainTS
         cloud_masks="s2cloudless_mask",
-        sample_type="cloudy_cloudfree",
+        sample_type=config.sample_type,
         sampler="fixed",
         n_input_samples=input_t,
         rescale_method= "default",
@@ -899,53 +913,6 @@ def main():
         vary_samples=False, 
     )
  
-    # if config.pretrain:  # pretrain / training on mono-temporal data
-    #     dt_train = SEN12MSCR(
-    #         os.path.expanduser(config.root3),
-    #         split="train",
-    #         region=config.region,
-    #         sample_type=config.sample_type,
-    #     )
-    #     dt_val = SEN12MSCR(
-    #         os.path.expanduser(config.root3),
-    #         split="val",
-    #         region=config.region,
-    #         sample_type=config.sample_type,
-    #     )
-    #     dt_test = SEN12MSCR(
-    #         os.path.expanduser(config.root3),
-    #         split="test",
-    #         region=config.region,
-    #         sample_type=config.sample_type,
-    #     )
-    # else:
-    #     dt_train = SEN12MSCRTS(
-    #         os.path.expanduser(config.root1),
-    #         split="train",
-    #         region=config.region,
-    #         sample_type=config.sample_type,
-    #         sampler="random" if config.vary_samples else "fixed",
-    #         n_input_samples=config.input_t,
-    #         import_data_path=import_from_path("train", config),
-    #         min_cov=config.min_cov,
-    #         max_cov=config.max_cov,
-    #     )
-    #     dt_val = SEN12MSCRTS(
-    #         os.path.expanduser(config.root2),
-    #         split="val",
-    #         region="all",
-    #         sample_type=config.sample_type,
-    #         n_input_samples=config.input_t,
-    #         import_data_path=import_from_path("val", config),
-    #     )
-    #     dt_test = SEN12MSCRTS(
-    #         os.path.expanduser(config.root2),
-    #         split="test",
-    #         region="all",
-    #         sample_type=config.sample_type,
-    #         n_input_samples=config.input_t,
-    #         import_data_path=import_from_path("test", config),
-    #     )
 
     # wrap to allow for subsampling, e.g. for test runs etc
     dt_train = torch.utils.data.Subset(
@@ -986,7 +953,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dt_train,
         batch_size=config.batch_size,
-        shuffle=True,
+        shuffle=config.shuffle,
         worker_init_fn=seed_worker,
         generator=f,
         num_workers=config.num_workers,
@@ -1019,8 +986,6 @@ def main():
 
     config.N_params = utils.get_ntrainparams(model)
 
-
-
     # print("\n\nTrainable layers:")
     # for name, p in model.named_parameters():
     #     if p.requires_grad:
@@ -1039,13 +1004,12 @@ def main():
             train_out_layer=True,
             load_out_partly=config.model in ["uncrtaints"],
         )
-
     with open(
         os.path.join(config.res_dir, config.experiment_name, "conf.json"), "w"
     ) as file:
         file.write(json.dumps(vars(config), indent=4))
     print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
-    print(model)
+    # print(model)
 
     # Optimizer and Loss
     model.criterion = losses.get_loss(config)

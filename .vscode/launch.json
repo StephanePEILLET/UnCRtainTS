@@ -25,7 +25,7 @@
             "request": "launch",
             "program": "model/train_reconstruct.py",
             "console": "integratedTerminal",
-            "args": "--experiment_name my_first_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/train"
+            "args": "--config_file /home/SPeillet/cloud_reconstruction/UnCRtainTS_pl/configs/train_CIRCA.yaml --experiment_name my_first_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/train"
         },
         {
             "name": "Test reconstruct",

@@ -18,9 +18,19 @@ def get_base_model(config):
 
 # for running image reconstruction
 def get_generator(config):
+    # use_sar: asc / desc / mix_closest / asc+desc
+    if hasattr(config, "use_sar") and config.use_sar is not None and config.use_sar:
+        if config.use_sar == "asc+desc": 
+            input_dim = S1_BANDS * 2 + S2_BANDS
+        else:
+            input_dim = S1_BANDS + S2_BANDS
+
+    else:
+        input_dim = S2_BANDS
+
     if "unet" in config.model:
         model = utae.UNet(
-            input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+            input_dim=input_dim,
             encoder_widths=config.encoder_widths,
             decoder_widths=config.decoder_widths,
             out_conv=config.out_conv,
@@ -42,7 +52,7 @@ def get_generator(config):
         if config.pretrain:
             # on monotemporal data, just use a simple U-Net
             model = utae.UNet(
-                input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+                input_dim=input_dim,
                 encoder_widths=config.encoder_widths,
                 decoder_widths=config.decoder_widths,
                 out_conv=config.out_conv,
@@ -62,7 +72,7 @@ def get_generator(config):
             )
         else:
             model = utae.UTAE(
-                input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+                input_dim=input_dim,
                 encoder_widths=config.encoder_widths,
                 decoder_widths=config.decoder_widths,
                 out_conv=config.out_conv,
@@ -88,7 +98,7 @@ def get_generator(config):
             )
     elif "uncrtaints" == config.model:
         model = uncrtaints.UNCRTAINTS(
-            input_dim=S1_BANDS * config.use_sar + S2_BANDS,
+            input_dim=input_dim,
             encoder_widths=config.encoder_widths,
             decoder_widths=config.decoder_widths,
             out_conv=config.out_conv,

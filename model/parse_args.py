@@ -2,10 +2,14 @@ import argparse
 
 S2_BANDS = 10
 
-
 def create_parser(mode="train"):
     parser = argparse.ArgumentParser()
     # model parameters
+    parser.add_argument(
+        "--config_file",
+        type=str,
+        help="Path to a config file to load parameters from",
+    )
     parser.add_argument(
         "--model",
         default="uncrtaints",  # e.g. 'unet', 'utae', 'uncrtaints',
