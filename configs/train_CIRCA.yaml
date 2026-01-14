@@ -1,18 +1,18 @@
-model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
+#OUTPUT PARAMETERS
 experiment_name: UnCRtainTS_bs_7_MGNLL_experiment # Name of the current experiment
-res_dir: "/DATA_10TB/data_rpg/outputs/UnCRtainTS/train"
+res_dir: /DATA_10TB/data_rpg/outputs/UnCRtainTS/train
+
 #DATA PARAMETERS
-#hdf5_file: "/home/SPeillet/Downloads/data/circa_cloud_removal.hdf5"  # Path to HDF5 file containing the data
-hdf5_file: "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5" #"/var/data/datasets/circa_cloud_removal.hdf5"
-shuffle: true                                  # Whether to shuffle the data
-use_sar: "mix_closest"                               # Whether to include Sentinel-1 SAR data
-channels: "all"                                # Which channels to include ('all' or specific subset)
-sample_type: "cloudy_cloudfree"
-sampler: "random"
+hdf5_file: /DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5 #"/var/data/datasets/circa_cloud_removal.hdf5"
+use_sar: mix_closest                               # Whether to include Sentinel-1 SAR data
+channels: all                                # Which channels to include ('all' or specific subset)
+sample_type: cloudy_cloudfree
+sampler: random
 batch_size: 1                          # Batch size for training
 input_t: 3                                  # Number of input time steps
 
 # TRAINING PARAMETERS
+model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
 num_workers: 0                        # Number of data loading workers 
 loss: MGNLL                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
 epochs: 20

@@ -26,5 +26,5 @@ eval "$(conda shell.bash hook)"
 conda deactivate
 conda activate cloud_reconstruction
 
-srun --cpu-bind=none python train_reconstruct.py --config_file "/mnt/common/hdd/home/SPeillet/UnCRtainTS/configs/train_CIRCA_jzellou.yaml"
+srun --cpu-bind=none python model/train_reconstruct.py --config_file "/mnt/common/hdd/home/SPeillet/UnCRtainTS/configs/train_CIRCA_jzellou.yaml"
 echo "Job complete"
