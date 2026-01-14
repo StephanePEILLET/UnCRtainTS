@@ -7,7 +7,7 @@
 #SBATCH --hint=nomultithread         # hyperthreading desactive
 #SBATCH --mem=100G       # Memory proportional to GPUs: 32000 Cedar, 64000 Graham.
 #SBATCH --partition=jean-zellou
-#SBATCH--nodelist=DEL2212S023
+
 #SBATCH -e /mnt/stores/store-DAI/tmp/speillet/logs/uncrtaints-%j.out
 #SBATCH -o /mnt/stores/store-DAI/tmp/speillet/logs/uncrtaints-%j.out
 
