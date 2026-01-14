@@ -8,12 +8,12 @@ use_sar: mix_closest                               # Whether to include Sentinel
 channels: all                                # Which channels to include ('all' or specific subset)
 sample_type: cloudy_cloudfree
 sampler: random
-batch_size: 1                          # Batch size for training
-input_t: 3                                  # Number of input time steps
+batch_size: 5                          # Batch size for training
+input_t: 7                                  # Number of input time steps
 
 # TRAINING PARAMETERS
 model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
-num_workers: 0                        # Number of data loading workers 
+num_workers: 12                        # Number of data loading workers 
 loss: MGNLL                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
-epochs: 20
+epochs: 120
 shuffle: true                                  # Whether to shuffle the data
