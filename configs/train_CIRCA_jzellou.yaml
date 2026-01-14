@@ -1,5 +1,6 @@
-model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
+# OUTPUT DIRECTORY
 experiment_name: UnCRtainTS_bs_7_MGNLL_experiment # Name of the current experiment
+res_dir: "/mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/train"
 
 #DATA PARAMETERS
 #hdf5_file: "/home/SPeillet/Downloads/data/circa_cloud_removal.hdf5"  # Path to HDF5 file containing the data
@@ -13,6 +14,7 @@ batch_size: 1                          # Batch size for training
 input_t: 3                                  # Number of input time steps
 
 # TRAINING PARAMETERS
+model: uncrtaints  # Type of architecture to use. Can be one of: (utae/unet3d/fpn/convlstm/convgru/uconvlstm/buconvlstm)",
 num_workers: 0                        # Number of data loading workers 
 loss: MGNLL                           # Image reconstruction loss to utilize [l1|l2|GNLL|MGNLL]
 epochs: 20
