@@ -813,8 +813,11 @@ def main():
     if config.resume_at >= 0:
         config.lr = config.lr * config.gamma**config.resume_at
 
-
-    config.sampler = 'random' if config.vary_samples else 'fixed'
+    if hasattr(config, "sampler") and config.sampler is not None:
+        sampler = config.sampler
+    else:
+        sampler = 'random' if config.vary_samples else 'fixed'
+    config.sampler = sampler
 
     print_config_rich(OmegaConf.create(vars(config)))
 
@@ -844,10 +847,7 @@ def main():
 
     input_t = config.input_t
     path_hdf5_file = config.hdf5_file
-    if hasattr(config, "sampler") and config.sampler is not None:
-        train_sampler = config.sampler
-    else:
-        train_sampler = 'random' if config.vary_samples else 'fixed'
+
 
     # define data sets
     dt_train = UnCRtainTS_CIRCA_Adapter(
@@ -860,7 +860,7 @@ def main():
         # paramaters specific to UnCRtainTS
         cloud_masks="s2cloudless_mask",
         sample_type=config.sample_type,
-        sampler=train_sampler,
+        sampler=sampler,
         n_input_samples=input_t,
         rescale_method= "default",
         min_cov= 0.0,
@@ -881,7 +881,7 @@ def main():
         # paramaters specific to UnCRtainTS
         cloud_masks="s2cloudless_mask",
         sample_type=config.sample_type,
-        sampler="fixed",
+        sampler=sampler,
         n_input_samples=input_t,
         rescale_method= "default",
         min_cov= 0.0,

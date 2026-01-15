@@ -35,7 +35,7 @@ def fixed_sampler(
     cloudless_idx = coverage_idx[0]  # Take the (earliest) least cloudy sample
 
     # Select input samples within specified coverage range
-    inputs_idx = [pdx for pdx, perc in enumerate(coverage) if min_cov <= perc <= max_cov][:n_input_t]
+    inputs_idx = [pdx for pdx, perc in enumerate(coverage) if (min_cov <= perc <= max_cov) and (pdx != cloudless_idx)][:n_input_t]
 
     # Fallback if not enough samples meet criteria
     if len(inputs_idx) < n_input_t:

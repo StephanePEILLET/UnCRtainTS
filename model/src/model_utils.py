@@ -24,7 +24,6 @@ def get_generator(config):
             input_dim = S1_BANDS * 2 + S2_BANDS
         else:
             input_dim = S1_BANDS + S2_BANDS
-
     else:
         input_dim = S2_BANDS
 

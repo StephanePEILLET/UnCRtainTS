@@ -7,7 +7,7 @@ hdf5_file: /DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5 #"/var/data/datas
 use_sar: mix_closest                               # Whether to include Sentinel-1 SAR data
 channels: all                                # Which channels to include ('all' or specific subset)
 sample_type: cloudy_cloudfree
-sampler: random
+sampler: fixed
 batch_size: 1                          # Batch size for training
 input_t: 3                                  # Number of input time steps
 

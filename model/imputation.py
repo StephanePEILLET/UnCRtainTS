@@ -1,465 +1,163 @@
-import sys
-from pathlib import Path
+"""
+Main script for image reconstruction experiments
+Author: Patrick Ebel (github/PatrickTUM), based on the scripts of
+        Vivien Sainte Fare Garnot (github/VSainteuf)
+License: MIT
+"""
 
-import math
+import argparse
+import json
 import os
-from enum import Enum
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Literal
-from typing import Optional
-from typing import Tuple
+import pprint
+import random
+import sys
+import time
 
-import matplotlib
-import torch
+import numpy as np
 from matplotlib import pyplot as plt
-from torch import Tensor
-from torch import nn
+from tqdm import tqdm
 
+dirname = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(dirname))
 
-class Imputation:
-    def __init__(
-        self,
-        config_file_train: str | None,
-        method: Literal["utilise", "trivial"] = "utilise",
-        mode: Literal["last", "next", "closest", "linear_interpolation"] | None = None,
-        checkpoint: str | None = None,
-        config_file_test: str | None = None,
-        temporal_window: Optional[int] = None,
-        device: Optional[torch.device] = None,
-    ):
-        self.method = Method(method)
-        self.mode = Mode(mode)
-        self.checkpoint = checkpoint
-        self.config_file_train = config_file_train
+import torch
+import torchnet as tnt
+from parse_args import create_parser
+from model.src.config_utils import print_config_rich
+from omegaconf import OmegaConf
 
-        if self.method == Method.UTILISE:
-            if self.checkpoint is None:
-                raise ValueError("No checkpoint specified.\n")
+from src import losses, utils
+from src.learning.metrics import avg_img_metrics, img_metrics
+from src.learning.weight_init import weight_init
+from src.model_utils import (
+    freeze_layers,
+    get_model,
+    load_checkpoint,
+    load_model,
+    save_model,
+)
+from torch.utils.tensorboard import SummaryWriter
+from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
+from data.dataLoader import SEN12MSCR, SEN12MSCRTS
 
-            if self.config_file_train is None:
-                raise ValueError("No training configuration file specified.\n")
+import model.train_reconstruct as legacy
 
-            if not os.path.isfile(self.config_file_train):
-                raise FileNotFoundError(
-                    f"Cannot find the configuration file used during training: {self.config_file_train}\n"
-                )
+S2_BANDS = 10
 
-            if not os.path.isfile(self.checkpoint):
-                raise FileNotFoundError(f"Cannot find the model weights: {self.checkpoint}\n")
+def iterate_v2(model, data_loader, config, writer, mode="train", epoch=None, device=None):
 
-            # Read the configuration file used during training
-            self.config = config_utils.read_config(self.config_file_train)
+    if len(data_loader) == 0:
+        raise ValueError("Received data loader with zero samples!")
 
-            if self.method == Method.UTILISE and config_file_test is not None:
-                test_config = config_utils.read_config(config_file_test)
-                self.config.utilise.update(test_config.utilise)
-                self.config.data.channels = test_config.data.channels
-                if "include_S1" in test_config.data:
-                    if test_config.data.include_S1 is True:
-                        self.config.data.use_sar = "mix_closest"
-                    else:
-                        self.config.data.use_sar = test_config.data.include_S1
-                elif "use_sar" in test_config.data:
-                    self.config.data.use_sar = test_config.data.use_sar
-            # Extract the temporal window size and the number of channels used during training
-            if temporal_window is not None:
-                self.temporal_window = temporal_window
-            else:
-                self.temporal_window = self.config.data.max_seq_length
-            self.num_channels = data_utils.get_dataset(self.config, phase=self.config.misc.run_mode).num_channels
+    t_start = time.time()
+    for i, batch in enumerate(tqdm(data_loader)): 
+        assert config.sample_type == "generic":
 
-        if device is not None:
-            self.device = device
+        if config.sample_type == "cloudy_cloudfree":
+            x, y, in_m, dates = legacy.prepare_data(batch, device, config)
+        elif config.sample_type == "pretrain":
+            x, y, in_m = legacy.prepare_data(batch, device, config)
+            dates = None
         else:
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            raise NotImplementedError
+        inputs = {"A": x, "B": y, "dates": dates, "masks": in_m}
 
-        _ = torch.set_grad_enabled(False)
-
-        # Get the model
-        if self.method == Method.UTILISE:
-            self.model, _ = utils.get_model(self.config, self.num_channels)
-            self._resume()
-            self.model.to(self.device).eval()
-        else:
-            self.model = MODELS["ImageSeriesInterpolator"](mode=self.mode.value)
-
-    def impute_sample(
-        self,
-        batch: Dict[str, Any],
-        t_start: Optional[int] = None,
-        t_end: Optional[int] = None,
-        return_att: Optional[bool] = False,
-    ) -> Tuple[Dict[str, Any], Tensor, Tensor] | Tuple[Dict[str, Any], Tensor]:
-
-        if t_start is not None and t_end is not None:
-            # Choose a subsequence
-            batch["x"] = batch["x"][:, t_start:t_end, ...]
-
-            for key in ["y", "masks", "cloud_mask", "masks_valid_obs"]:
-                if key in batch:
-                    batch[key] = batch[key][:, t_start:t_end, ...]
-
-            for key in ["days", "position_days"]:
-                if key in batch:
-                    batch[key] = batch[key][:, t_start:t_end]
-
-        # Impute the given satellite image time series
-        if isinstance(self.model, MODELS["utilise"]):
-            batch = data_utils.to_device(batch, self.device)
-            if return_att:
-                y_pred, att = impute_sequence(self.model, batch, self.temporal_window, return_att=True)
-                if att is not None:
-                    att = att.cpu()
-            else:
-                y_pred = impute_sequence(self.model, batch, self.temporal_window, return_att=False)
-            batch = data_utils.to_device(batch, "cpu")
-            y_pred = y_pred.cpu()
-        else:
-            y_pred = self.model(batch["x"], cloud_mask=batch["masks"], days=batch["days"])
-
-        if return_att:
-            return batch, y_pred, att
-        return batch, y_pred
-
-    def _resume(self) -> None:
-        checkpoint = torch.load(self.checkpoint)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        print(f"Checkpoint '{self.checkpoint}' loaded.")
-        print(f"Chosen epoch: {checkpoint['epoch']}\n")
-        del checkpoint
-
-
-def impute_sequence(
-    model, batch: Dict[str, Any], temporal_window: int, return_att: bool = False
-) -> Tensor | Tuple[Tensor, Tensor]:
-    """
-    Sliding-window imputation of satellite image time series.
-
-    Assumption: `batch` consists of a single sample.
-    """
-
-    x = batch["x"]
-    positions = batch["position_days"]
-    y_pred: Tensor
-    att: Tensor
-
-    if temporal_window is None or x.shape[1] <= temporal_window:
-        # Process the entire sequence in one go
-        if return_att:
-            y_pred, att = model(x, batch_positions=positions, return_att=True)
-        else:
-            y_pred = model(x, batch_positions=positions)
-    else:
-        if return_att:
-            att = None
-
-        t_start = 0
-        t_end = temporal_window
-        t_max = x.shape[1]
-        cloud_coverage = torch.mean(batch["masks"], dim=(0, 2, 3, 4))
-        reached_end = False
-
-        while not reached_end:
-            y_pred_chunk = model(x[:, t_start:t_end], batch_positions=positions[:, t_start:t_end])
-
-            if t_start == 0:
-                # Initialize the full-length output sequence
-                B, T, _, H, W = x.shape
-                C = y_pred_chunk.shape[2]
-                y_pred = torch.zeros((B, T, C, H, W), device=x.device)
-
-                y_pred[:, t_start:t_end] = y_pred_chunk
-
-                # Move the temporal window
-                t_start_old = t_start
-                t_end_old = t_end
-                t_start, t_end = move_temporal_window_next(t_start, t_max, temporal_window, cloud_coverage)
-            else:
-                # Find the indices of those frames that have been processed by both the previous and the current
-                # temporal window
-                t_candidates = (
-                    torch.Tensor(
-                        list(
-                            set(torch.arange(t_start_old, t_end_old).tolist())
-                            & set(torch.arange(t_start, t_end).tolist())
-                        )
-                    )
-                    .long()
-                    .to(x.device)
-                )
-
-                # Find the frame for which the difference between the previous and the current prediction is
-                # the lowest:
-                # use this frame to switch from the previous imputation results to the current imputation results
-                error = torch.mean(
-                    torch.abs(y_pred[:, t_candidates] - y_pred_chunk[:, t_candidates - t_start]),
-                    dim=(0, 2, 3, 4),
-                )
-                t_switch = error.argmin().item() + t_start
-                y_pred[:, t_switch:t_end] = y_pred_chunk[:, (t_switch - t_start) : :]
-
-                if t_end == t_max:
-                    reached_end = True
+        if mode != "train":  # val or test
+            with torch.no_grad():
+                # compute single-model mean and variance predictions
+                model.set_input(inputs)
+                model.forward()
+                model.get_loss_G()
+                model.rescale()
+                out = model.fake_B
+                if hasattr(model.netG, "variance") and model.netG.variance is not None:
+                    var = model.netG.variance
+                    model.netG.variance = None
                 else:
-                    # Move the temporal window
-                    t_start_old = t_start
-                    t_end_old = t_end
-                    t_start, t_end = move_temporal_window_next(t_start_old, t_max, temporal_window, cloud_coverage)
+                    var = out[:, :, S2_BANDS:, ...]
+                out = out[:, :, :S2_BANDS, ...]
+                batch_size = y.size()[0]
 
-    if return_att:
-        return y_pred, att
-    return y_pred
+                for bdx in range(batch_size):
 
+        else:  # training
+           raise NotImplementedError
+        
+        # log the loss, computed via model.backward_G() at train time & via model.get_loss_G() at val/test time
+        loss_meter.add(model.loss_G.item())
+        # after each batch, close any leftover figures
+        plt.close("all")
 
-def move_temporal_window_end(t_max: int, temporal_window: int) -> Tuple[int, int]:
-    """
-    Moves the temporal window for evaluation such that the last frame of the temporal window coincides with the
-    last frame of the image sequence.
+    # --- end of epoch ---
+    # after each epoch, log the loss metrics
+    t_end = time.time()
+    total_time = t_end - t_start
+    print(f"Epoch time : {total_time:.1f}s")
+    metrics = {f"{mode}_epoch_time": total_time}
+    # log the loss, only computed within model.backward_G() at train time
+    metrics[f"{mode}_loss"] = loss_meter.value()[0]
 
-    Args:
-        t_max:              int, sequence length of the image sequence
-        temporal_window:    int, length of the subsequence passed to U-TILISE for processing
+    if mode in {"test", "val"}:
+        # log the metrics
 
-    Returns:
-        t_start:            int, frame index, start of the subsequence
-        t_end:              int, frame index, end of the subsequence
-    """
+        # log image metrics
+        for key, val in img_meter.value().items():
+            writer.add_scalar(f"{mode}/{key}", val, step)
 
-    t_start = t_max - temporal_window
-    t_end = t_max
+        # any loss is currently only computed within model.backward_G() at train time
+        writer.add_scalar(f"{mode}/loss", metrics[f"{mode}_loss"], step)
 
-    return t_start, t_end
+        # use add_images for batch-wise adding across temporal dimension
+        if config.use_sar:
+            writer.add_image(
+                f"Img/{mode}/in_s1", x[0, :, [0], ...], step, dataformats="NCHW"
+            )
+            writer.add_image(
+                f"Img/{mode}/in_s2", x[0, :, [5, 4, 3], ...], step, dataformats="NCHW"
+            )
+        else:
+            writer.add_image(
+                f"Img/{mode}/in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW"
+            )
+        writer.add_image(
+            f"Img/{mode}/out", out[0, 0, [3, 2, 1], ...], step, dataformats="CHW"
+        )
+        writer.add_image(
+            f"Img/{mode}/y", y[0, 0, [3, 2, 1], ...], step, dataformats="CHW"
+        )
+        writer.add_image(
+            f"Img/{mode}/m", in_m[0, :, None, ...], step, dataformats="NCHW"
+        )
 
+        # compute Expected Calibration Error (ECE)
+        if config.loss in ["GNLL", "MGNLL"]:
+            sorted_errors_se = legacy.compute_ece(
+                vars_aleatoric, errs_se, len(data_loader.dataset), percent=5
+            )
+            sorted_errors = {"se_sortAleatoric": sorted_errors_se}
+            legacy.plot_discard(
+                writer, sorted_errors["se_sortAleatoric"], config, mode, step, is_se=True
+            )
 
-def move_temporal_window_next(
-    t_start: int, t_max: int, temporal_window: int, cloud_coverage: Tensor
-) -> Tuple[int, int]:
-    """
-    Moves the temporal window for evaluation by half of the temporal window size (= stride).
-    If the first frame within the new temporal window is cloudy (cloud coverage above 10%), the temporal window is
-    shifted by at most half the stride (backward or forward) such that the first frame is as least cloudy as
-    possible.
+            # compute ECE
+            uce_l2, auce_l2 = legacy.compute_uce_auce(
+                writer,
+                vars_aleatoric,
+                errs,
+                len(data_loader.dataset),
+                percent=5,
+                l2=True,
+                mode=mode,
+                step=step,
+            )
 
-    Args:
-        t_start:            int, frame index, start of the subsequence for processing
-        t_max:              int, frame index, t_max - 1 is the last frame of the subsequence for processing
-        temporal_window:    int, length of the subsequence passed to U-TILISE for processing
-        cloud_coverage:     torch.Tensor, (T,), cloud coverage [-] per frame
+            # no need for a running mean here
+            img_meter.value()["UCE SE"] = uce_l2.cpu().numpy().item()
+            img_meter.value()["AUCE SE"] = auce_l2.cpu().numpy().item()
 
-    Returns:
-        t_start:            int, frame index, start of the subsequence
-        t_end:              int, frame index, end of the subsequence
-    """
+        if config.loss in ["GNLL", "MGNLL"]:
+            legacy.log_aleatoric(writer, config, mode, step, var, "model/", img_meter)
 
-    stride = temporal_window // 2
-    t_start += stride
-
-    if t_start + temporal_window > t_max:
-        # Reduce the stride such that the end of the temporal window coincides with the end of the entire sequence
-        t_start, t_end = move_temporal_window_end(t_max, temporal_window)
-    # Check if the start of the next temporal window is mostly cloud-free
-    elif cloud_coverage[t_start] <= 0.1:
-        # Keep the default stride and ensure that the temporal window does not exceed the sequence length
-        t_end = t_start + temporal_window
-        if t_end > t_max:
-            t_start, t_end = move_temporal_window_end(t_max, temporal_window)
+        return metrics, img_meter.value()
     else:
-        # Find the least cloudy frame within [t_start + stride - dt, t_start + stride + dt]
-        dt = math.ceil(stride / 2)
-        left = max(0, t_start - dt)
-        right = min(t_start + dt + 1, t_max)
-
-        # Frame(s) with the lowest cloud coverage within [t_start + stride - dt, t_start + stride + dt]
-        t_candidates = (cloud_coverage[left:right] == cloud_coverage[left:right].min()).nonzero(as_tuple=True)[0] + left
-
-        # Take the frame closest to the standard stride
-        t_start = t_candidates[torch.abs(t_candidates - t_start).argmin()].item()
-
-        # Ensure that the temporal window does not exceed the sequence length
-        t_end = t_start + temporal_window
-        if t_end > t_max:
-            t_start, t_end = move_temporal_window_end(t_max, temporal_window)
-
-    return t_start, t_end
-
-
-def upsample_att_maps(att: Tensor, target_shape: Tuple[int, int]) -> Tensor:
-    """Upsamples the attention masks `att` to the spatial resolution `target_shape`."""
-
-    n_heads, b, t_out, t_in, h, w = att.shape
-    attn = att.view(n_heads * b * t_out, t_in, h, w)
-
-    attn = nn.Upsample(size=target_shape, mode="bilinear", align_corners=False)(attn)
-
-    return attn.view(n_heads, b, t_out, t_in, *target_shape)
-
-
-def visualize_att_for_one_head_across_time(
-    seq: Tensor,
-    att: Tensor,
-    head: int,
-    batch: int = 0,
-    upsample_att: bool = True,
-    indices_rgb: List[int] | List[float] | Tensor | None = None,
-    brightness_factor: float = 1,
-    fontsize: int = 10,
-    scale_individually: bool = False,
-) -> matplotlib.figure.Figure:
-    """
-    Visualizes the attention masks learned by the `head`.th attention head across time.
-
-    Args:
-        seq:                    torch.Tensor, B x T x C x H x W, satellite image time series.
-        att:                    torch.Tensor, n_head x B x T x T x h x w, attention masks.
-        head:                   int, index of the attention head to be visualized.
-        batch:                  int, batch index to visualize.
-        upsample_att:           bool, True to upsample the attention masks to the spatial resolution of the satellite
-                                image time series; False to keep the native spatial resolution of the attention masks.
-        indices_rgb:            list of int or list of float or torch.Tensor, indices of the RGB channels.
-        brightness_factor:      float, brightness factor applied to all images in the sequence.
-        figsize:                (float, float), figure size.
-        fontsize:               int, font size.
-        scale_individually:     bool, True to scale the attention masks for each time step individually; False to
-                                maintain a common scale across all attention masks and time.
-
-    Returns:
-        matplotlib.pyplot.
-    """
-
-    indices_rgb = [0, 1, 2] if indices_rgb is None else indices_rgb
-
-    if upsample_att:
-        target_shape = seq.shape[-2:]
-        att = upsample_att_maps(att, target_shape)
-
-    seq_length = seq.shape[1]
-    figsize = (7, 1 + seq_length)
-    fig, axes = plt.subplots(nrows=seq_length + 1, ncols=1, figsize=figsize)
-
-    # Plot satellite image time series
-    grid = visutils.gallery(seq[batch, :, indices_rgb, :, :], brightness_factor=brightness_factor)
-    axes[0].imshow(grid, COLORMAPS["rgb"])
-    axes[0].set_title("Input sequence", fontsize=fontsize)
-
-    if scale_individually:
-        vmin = None
-        vmax = None
-    else:
-        vmin = 0
-        vmax = 1
-
-    # Plot attention mask for attention head `head` across all time steps
-    for t in range(seq_length):
-        grid = visutils.gallery(att[head, batch, t, :, :, :].unsqueeze(1), brightness_factor=1)
-        axes[t + 1].imshow(grid, COLORMAPS["att"], vmin=vmin, vmax=vmax)
-        axes[t + 1].set_title(f"Attention mask, head {head}, target frame {t}", fontsize=fontsize)
-
-    for ax in axes.ravel():
-        ax.set_axis_off()
-    plt.tight_layout()
-
-    return fig
-
-
-def visualize_att_for_target_t_across_heads(
-    seq: Tensor,
-    att: Tensor,
-    t_target: int,
-    batch: int = 0,
-    upsample_att: bool = True,
-    indices_rgb: List[int] | List[float] | Tensor | None = None,
-    brightness_factor: float = 1,
-    figsize: Tuple[float, float] = (10, 7),
-    dpi: int = 200,
-    fontsize: int = 10,
-    scale_individually: bool = False,
-    highlight_t_target: bool = True,
-) -> matplotlib.figure.Figure:
-    """
-    Visualizes the attention masks of all attention heads w.r.t. to the time step `t_target`.
-
-    Args:
-        seq:                    torch.Tensor, B x T x C x H x W, satellite image time series.
-        att:                    torch.Tensor, n_head x B x T x T x h x w, attention masks.
-        t_target:               int, time step (temporal coordinate) to visualize.
-        batch:                  int, batch index to visualize.
-        upsample_att:           bool, True to upsample the attention masks to the spatial resolution of the satellite
-                                image time series; False to keep the native spatial resolution of the attention masks.
-        indices_rgb:            list of int or list of float or torch.Tensor, indices of the RGB channels.
-        brightness_factor:      float, brightness factor applied to all images in the sequence.
-        figsize:                (float, float), figure size.
-        dpi:                    int, dpi of the figure.
-        fontsize:               int, font size.
-        scale_individually:     bool, True to scale the attention masks for each time step individually; False to
-                                maintain a common scale across all attention masks and time.
-        highlight_t_target:     bool, True to highlight the target time step by drawing a red frame around the
-                                respective image in the time series.
-
-    Returns:
-        matplotlib.pyplot.
-    """
-
-    indices_rgb = [0, 1, 2] if indices_rgb is None else indices_rgb
-
-    if upsample_att:
-        target_shape = seq.shape[-2:]
-        att = upsample_att_maps(att, target_shape)
-
-    n_heads = att.shape[0]
-    fig, axes = plt.subplots(nrows=n_heads + 1, ncols=1, figsize=figsize, dpi=dpi)
-
-    # Plot input sequence
-    grid = visutils.gallery(seq[batch, :, indices_rgb, :, :], brightness_factor=brightness_factor)
-
-    if highlight_t_target:
-        # Create a red frame to highlight the target frame
-        border_thickness = 2
-        H, W = seq.shape[-2:]
-        H += 2 * border_thickness
-        W += 2 * border_thickness
-        frame_color = torch.Tensor([1, 0, 0]).type(grid.dtype)
-
-        if t_target < 0:
-            t_target = seq.shape[1] - abs(t_target)
-
-        grid[0 : (2 * border_thickness + 1), t_target * W : (t_target + 1) * W, :] = frame_color
-        grid[-2 * border_thickness : :, t_target * W : (t_target + 1) * W, :3] = frame_color
-        grid[:, t_target * W - border_thickness : t_target * W + border_thickness, :] = frame_color
-        grid[
-            :,
-            ((t_target + 1) * W - border_thickness) : (t_target + 1) * W + border_thickness,
-            :,
-        ] = frame_color
-
-        if t_target == seq.shape[1] - 1:
-            grid[
-                :,
-                ((t_target + 1) * W - 2 * border_thickness) : (t_target + 1) * W + border_thickness,
-                :,
-            ] = frame_color
-        elif t_target == 0:
-            grid[:, 0 : 2 * border_thickness, :] = frame_color
-
-    axes[0].imshow(grid, COLORMAPS["rgb"])
-    axes[0].set_title("Input sequence", fontsize=fontsize)
-
-    if scale_individually:
-        vmin = None
-        vmax = None
-    else:
-        vmin = 0
-        vmax = 1
-
-    # Plot attention masks per head for frame `t_target`
-    for head in range(n_heads):
-        grid = visutils.gallery(att[head, batch, t_target, :, :, :].unsqueeze(1), brightness_factor=1)
-        axes[head + 1].imshow(grid, COLORMAPS["att"], vmin=vmin, vmax=vmax)
-        axes[head + 1].set_title(f"Attention mask, head {head}, target frame {t_target}", fontsize=fontsize)
-
-    for ax in axes.ravel():
-        ax.set_axis_off()
-    plt.tight_layout()
-
-    return fig
+        return metrics

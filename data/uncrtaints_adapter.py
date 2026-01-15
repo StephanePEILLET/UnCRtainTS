@@ -233,6 +233,10 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
                 coverage,
                 clear_tresh=self.clear_threshold,
             )
+            print("Sampling method:", self.sampling)
+            print("Selected input indices:", inputs_idx)
+            print("Selected target index:", cloudless_idx)
+
             # print(f"Sample {pdx}: input indices {inputs_idx}, target index {cloudless_idx}, coverage match: {coverage_match}")
             # print("len inputs_idx:", len(inputs_idx), "/ length s2:", len(s2))
             input_s2: Tensor = torch.from_numpy(s2[inputs_idx])
