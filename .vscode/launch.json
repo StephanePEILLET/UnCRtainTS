@@ -31,9 +31,10 @@
             "name": "Test reconstruct",
             "type": "debugpy",
             "request": "launch",
-            "program": "model/test_reconstruct_circa.py",
+            "program": "model/test_reconstruct.py",
             "console": "integratedTerminal",
-            "args": "--experiment_name UnCRtainTS_bs_7_MGNLL_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/inference --weight_folder /DATA_10TB/data_rpg/outputs/UnCRtainTS/results/train"
+            "args": "--config_file /home/SPeillet/cloud_reconstruction/UnCRtainTS_pl/configs/test_CIRCA.yaml"
+            // "args": "--config_file /home/SPeillet/cloud_reconstruction/UnCRtainTS_pl/configs/test_CIRCA.yaml --experiment_name UnCRtainTS_bs_7_MGNLL_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/inference --weight_folder /DATA_10TB/data_rpg/outputs/UnCRtainTS/results/train"
         },
     ]
 }

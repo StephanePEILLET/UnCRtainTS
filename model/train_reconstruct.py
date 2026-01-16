@@ -271,7 +271,6 @@ def log_train(writer, config, model, step, x, out, y, in_m, name="", var=None):
     writer.add_image(
         f"Img/train/{name}m", in_m[0, :, None, ...], step, dataformats="NCHW"
     )
-
     # analyse cloud coverage
 
     # covered at ALL time points (AND) or covered at ANY time points (OR)

@@ -29,11 +29,20 @@ from train_reconstruct import (
 )
 
 from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
-from dataloader_CIRCA_old.datasets.CIRCA_dataset_for_UnCRtainTS import CircaPatchDataSetForUnCRtainTS
 
 parser = create_parser(mode="test")
 test_config = parser.parse_args()
 test_config.pid = os.getpid()
+
+if "config_file" in test_config and os.path.isfile(test_config.config_file):
+    from model.src.config_utils import read_config
+    from omegaconf import OmegaConf
+    params_conf_file = read_config(test_config.config_file)
+    test_config.weight_folder = params_conf_file.weight_folder
+    test_config.experiment_name = params_conf_file.experiment_name
+    test_config.batch_size = params_conf_file.batch_size
+else:
+    params_conf_file = None
 
 # load previous config from training directories
 conf_path = (
@@ -102,16 +111,9 @@ def main(config):
     config.N_params = utils.get_ntrainparams(model)
     print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
 
-    config.hdf5_file = "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5"
-    config.input_t = 3
-    config.sample_type = "generic"
-    config.sampler = "fixed"
-    config.use_sar = "mix_closest"
-    config.channels = "all"
-    config.shuffle = False
-    config.num_workers = 1
-    config.batch_size = 1
-    
+    if params_conf_file is not None:
+        config.__dict__.update(params_conf_file)
+
     S1_LAUNCH: str = "2014-04-03"
     CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
 
@@ -150,8 +152,8 @@ def main(config):
     # Load weights
     ckpt_n = f"_epoch_{config.resume_at}" if config.resume_at > 0 else ""
     # load_checkpoint(config, config.weight_folder, model, f"model{ckpt_n}")
-
-    chckp_path = os.path.join(config.weight_folder, config.experiment_name, f"model.pth.tar")
+    # /DATA_10TB/data_rpg/outputs/UnCRtainTS/results/train/UnCRtainTS_bs_7_MGNLL_experiment/model.pth.tar
+    chckp_path = os.path.join(config.weight_folder, config.experiment_name, f"model.pth.tar") 
     print(f"Loading checkpoint {chckp_path}")
     checkpoint = torch.load(chckp_path, map_location=config.device)["state_dict"]
 
