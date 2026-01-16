@@ -1,0 +1,12 @@
+experiment_name: UnCRtainTS_bs_4_lents_11_MGNLL_experiment_random_repaired
+res_dir: /mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/inference
+weight_folder: /mnt/common/hdd/home/SPeillet/outputs/UnCRtainTS/train
+hdf5_file: /var/data/datasets/CIRCA_CR_merged.hdf5
+
+sample_type: generic
+sampler: fixed
+use_sar: mix_closest
+channels: all
+shuffle: False
+num_workers: 1
+batch_size: 1
