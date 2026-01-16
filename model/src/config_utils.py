@@ -25,7 +25,7 @@ def resolve_tuple(*args):
     return tuple(args)
 
 
-OmegaConf.register_new_resolver("tuple", resolve_tuple)
+# OmegaConf.register_new_resolver("tuple", resolve_tuple)
 
 
 def print_config(config: DictConfig | prodict.Prodict | str, logger: Optional[logging.Logger] = None) -> None:

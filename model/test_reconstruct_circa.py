@@ -22,7 +22,7 @@ from src import utils
 from src.model_utils import get_model, load_checkpoint
 from torch.utils.tensorboard import SummaryWriter
 from train_reconstruct import (
-    iterate,
+    # iterate,
     prepare_output,
     save_results,
     seed_packages,
@@ -34,11 +34,6 @@ from dataloader_CIRCA_old.datasets.CIRCA_dataset_for_UnCRtainTS import CircaPatc
 parser = create_parser(mode="test")
 test_config = parser.parse_args()
 test_config.pid = os.getpid()
-
-targ_s2 = [
-    f"ROIs1868/73/S2/14/s2_ROIs1868_73_ImgNo_14_2018-06-21_patch_{pdx}.tif"
-    for pdx in [171, 172, 173, 187, 188, 189, 203, 204, 205]
-]
 
 # load previous config from training directories
 conf_path = (
@@ -85,9 +80,6 @@ else:
     config = test_config  # otherwise, keep passed flags without any overwriting
 config = utils.str2list(config, ["encoder_widths", "decoder_widths", "out_conv"])
 
-if config.pretrain:
-    config.batch_size = 32
-
 experime_dir = os.path.join(config.res_dir, config.experiment_name)
 if not os.path.exists(experime_dir):
     os.makedirs(experime_dir)
@@ -96,12 +88,8 @@ with open(os.path.join(experime_dir, "conf.json"), "w") as file:
 
 # seed everything
 seed_packages(config.rdm_seed)
-if __name__ == "__main__":
-    pprint.pprint(config)
-
 # instantiate tensorboard logger
 writer = SummaryWriter(os.path.join(config.res_dir, config.experiment_name))
-
 
 
 def main(config):
@@ -113,55 +101,40 @@ def main(config):
     model = model.to(device)
     config.N_params = utils.get_ntrainparams(model)
     print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
-    #print(model)
 
-    # get data loader
-
-    circa_path = Path('/mnt/stores/store-dai/projets/pac/3str/EXP_2')
-    data_raster = circa_path / 'Data_Raster'
-    input_t = 3
-    print(f"Chemin CIRCA: {circa_path}")
-    
-    # Vérifier les chemins
-    optique_path = data_raster / 'optique_dataset'
-    radar_path = data_raster / 'radar_dataset_v4'
-    
-    if not circa_path.exists():
-        print(f"❌ Le répertoire {circa_path} n'existe pas")
+    config.hdf5_file = "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5"
+    config.input_t = 3
+    config.sample_type = "generic"
+    config.sampler = "fixed"
+    config.use_sar = "mix_closest"
+    config.channels = "all"
+    config.shuffle = False
+    config.num_workers = 1
+    config.batch_size = 1
     
     S1_LAUNCH: str = "2014-04-03"
-    SEN12MSCRTS_SEQ_LENGTH: int = 30  # Length of the Sentinel time series
     CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
 
     circa_ds = UnCRtainTS_CIRCA_Adapter(
         phase="test",
-        hdf5_file= "/DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5",
-        shuffle=False,
-        use_sar="mix_closest",
-        channels= "all",
+        hdf5_file=config.hdf5_file,
+        shuffle=config.shuffle,
+        use_sar=config.use_sar,
+        channels=config.channels,
         compute_cloud_mask=False,
         # paramaters specific to UnCRtainTS
-        cloud_masks= "s2cloudless_mask",
-        sample_type= "cloudy_cloudfree",
-        sampler= "fixed",
-        n_input_samples=input_t,
-        rescale_method= "default",
-        min_cov= 0.0,
-        max_cov= 1.0,
-        ref_date= S1_LAUNCH,
-        seq_length=30, #TODO comment rendre cela adaptatif à la donnée ? 
+        cloud_masks="s2cloudless_mask",
+        sample_type=config.sample_type,
+        sampler=config.sampler,
+        n_input_samples=config.input_t,
+        rescale_method="default",
+        min_cov=0.0,
+        max_cov=1.0,
+        ref_date=S1_LAUNCH,
+        seq_length=30, #TODO comment rendre cela adaptatif à la donnée ?
         clear_threshold=CLEAR_THRESHOLD,
-        vary_samples=False, 
+        vary_samples=False,
     )
-
-    # Essayer de créer le dataset CIRCA
-    # circa_ds = CircaPatchDataSetForUnCRtainTS(
-    #     data_optique=optique_path,
-    #     data_radar=radar_path,
-    #     patch_size=256,
-    #     overlap=0,
-    #     load_dataset="datasetCIRCAUnCRtainTS.csv",
-    # )
 
     dt_test = torch.utils.data.Subset(
         circa_ds, range(0, min(config.max_samples_count, len(circa_ds)))
@@ -170,9 +143,8 @@ def main(config):
     test_loader = torch.utils.data.DataLoader(
         dt_test, 
         batch_size=config.batch_size,
-        shuffle=False,
-        num_workers=1
-        #collate_fn=circa_collate_fn  # Utiliser notre fonction personnalisée
+        shuffle=config.shuffle,
+        num_workers=config.num_workers,
     )
 
     # Load weights
@@ -203,13 +175,11 @@ def main(config):
     print("Testing . . .")
     model.eval()
 
-    _, test_img_metrics = iterate(
-        model,
+    from model.imputation import iterate_full_sequence
+    test_img_metrics = iterate_full_sequence(
+        model=model,
         data_loader=test_loader,
         config=config,
-        writer=writer,
-        mode="test",
-        epoch=1,
         device=device,
     )
     print(f"\nTest image metrics: {test_img_metrics}")

@@ -8,7 +8,8 @@ import rasterio
 from numpy.typing import NDArray
 from rasterio.io import DatasetReader
 from scipy.ndimage import gaussian_filter
-
+import torch
+from torch import Tensor
 from util.detect_cloudshadow import get_cloud_mask, get_shadow_mask
 
 # Type aliases for better readability
@@ -224,3 +225,17 @@ def get_cloud_map(img: ImageArray, detector: CloudDetectorType, instance: Option
         warnings.warn(f"Method {detector} not yet implemented!")
 
     return mask.astype(np.float32)
+
+
+def reverse_rescale(img: Tensor, old_min: float, old_max: float) -> Tensor:
+    """Reverse the rescaling operation to get back to original intensity range."""
+    old_range = old_max - old_min
+    img = img * old_range + old_min
+    return img.type(torch.int16)
+
+
+def reverse_process_MS(img: Tensor, intensity_min: int = 0, intensity_max: int = 10000) -> Tensor:
+    """Reverse the processing of multispectral data."""
+    img = reverse_rescale(img, intensity_min, intensity_max)
+    img = torch.clamp(img, min=intensity_min, max=intensity_max)
+    return img

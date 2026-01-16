@@ -38,7 +38,6 @@ from src.model_utils import (
 )
 from torch.utils.tensorboard import SummaryWriter
 from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
-from data.dataLoader import SEN12MSCR, SEN12MSCRTS
 
 S2_BANDS = 10
 
@@ -901,7 +900,7 @@ def main():
         compute_cloud_mask=False,
         # paramaters specific to UnCRtainTS
         cloud_masks="s2cloudless_mask",
-        sample_type=config.sample_type,
+        sample_type="generic",
         sampler="fixed",
         n_input_samples=input_t,
         rescale_method= "default",
@@ -912,7 +911,6 @@ def main():
         clear_threshold=CLEAR_THRESHOLD,
         vary_samples=False, 
     )
- 
 
     # wrap to allow for subsampling, e.g. for test runs etc
     dt_train = torch.utils.data.Subset(
@@ -968,13 +966,10 @@ def main():
     )
     test_loader = torch.utils.data.DataLoader(
         dt_test,
-        batch_size=config.batch_size,
+        batch_size=1,
         shuffle=False,
-        worker_init_fn=seed_worker,
-        generator=g,
-        # num_workers=config.num_workers,
+        num_workers=config.num_workers,
     )
-
     print(f"Train {len(dt_train)}, Val {len(dt_val)}, Test {len(dt_test)}")
 
     # model definition
@@ -1121,34 +1116,36 @@ def main():
     model.eval()
     model.netG.eval()
 
-    test_metrics, test_img_metrics = iterate(
-        model,
+    # test_metrics, test_img_metrics = iterate(
+    #     model,
+    #     data_loader=test_loader,
+    #     config=config,
+    #     writer=writer,
+    #     mode="test",
+    #     epoch=epoch,
+    #     device=device,
+    # )
+
+    from model.imputation import iterate_full_sequence
+    test_img_metrics = iterate_full_sequence(
+        model=model,
         data_loader=test_loader,
         config=config,
-        writer=writer,
-        mode="test",
-        epoch=epoch,
         device=device,
     )
-
-    if "test_loss" in test_metrics:
-        test_loss = test_metrics["test_loss"]
-    else:
-        test_loss = test_metrics["test_loss_ensembleAverage"]
-    print(f"Test Loss {test_loss}")
     print(f"\nTest image metrics: {test_img_metrics}")
+
     save_results(
         test_img_metrics,
         os.path.join(config.res_dir, config.experiment_name),
         split="test",
     )
+    print(f"\nTest image metrics: {test_img_metrics}")
     print(
         f"\nLogged test metrics to path {os.path.join(config.res_dir, config.experiment_name)}"
     )
-
     # close tensorboard logging
     writer.close()
-
     print(f"Finished training experiment {config.experiment_name}.")
 
 

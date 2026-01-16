@@ -202,23 +202,28 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
             dates_S1: List = patch_data["S1"]["S1_dates"]
             s1_td: List[int] = [(d - self.ref_date).days for d in dates_S1]
             # Process and normalize data
-            s1 = np.asarray([process_SAR(img, self.method) for img in s1])
-
-        s2 = np.asarray([process_MS(img, self.method) for img in s2])
 
         if self.sample_type == "generic":
             sample = {
                 "S2": s2,
-                "masks": masks,
-                "coverage": coverage,
+                "masks": patch_data["S2"]["cloud_prob"],
+                "coverage": patch_data["S2"]["cloud_prob"].mean(dim=(1, 2, 3)).tolist(),
                 "S2 TD": s2_td,
             }
             if self.use_sar:
                 sample["S1"] = s1 # [process_SAR(img, self.method) for img in s1]
                 sample["S1 TD"] = s1_td
+            if "idx_good_frames" in patch_data:
+                sample["idx_good_frames"] = patch_data["idx_good_frames"]
+            if "idx_syn_aleatoire" in patch_data:
+                sample["idx_syn_aleatoire"] = patch_data["idx_syn_aleatoire"]
+            if "idx_syn_consecutif" in patch_data:
+                sample["idx_syn_consecutif"] = patch_data["idx_syn_consecutif"]
             return sample
 
         elif self.sample_type == "cloudy_cloudfree":
+            masks = patch_data["S2"]["cloud_prob"][patch_data["idx_good_frames"]]
+            s2 = np.asarray([process_MS(img, self.method) for img in s2])
             # Sample cloud-free and cloudy dates
             inputs_idx: NDArray
             cloudless_idx: NDArray
@@ -233,12 +238,10 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
                 coverage,
                 clear_tresh=self.clear_threshold,
             )
-            print("Sampling method:", self.sampling)
-            print("Selected input indices:", inputs_idx)
-            print("Selected target index:", cloudless_idx)
+            # print("Sampling method:", self.sampling)
+            # print("Selected input indices:", inputs_idx)
+            # print("Selected target index:", cloudless_idx)
 
-            # print(f"Sample {pdx}: input indices {inputs_idx}, target index {cloudless_idx}, coverage match: {coverage_match}")
-            # print("len inputs_idx:", len(inputs_idx), "/ length s2:", len(s2))
             input_s2: Tensor = torch.from_numpy(s2[inputs_idx])
             input_masks: Tensor = masks[inputs_idx]
             target_s2: Tensor = torch.from_numpy(s2[cloudless_idx])
@@ -263,6 +266,7 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
             }
             # Prepare input and target data
             if self.use_sar:
+                s1 = np.asarray([process_SAR(img, self.method) for img in s1])
                 input_s1: Tensor = torch.from_numpy(s1[inputs_idx])
                 target_s1: Tensor = torch.from_numpy(s1[cloudless_idx])
 

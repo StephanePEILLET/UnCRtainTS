@@ -35,13 +35,5 @@
             "console": "integratedTerminal",
             "args": "--experiment_name UnCRtainTS_bs_7_MGNLL_experiment --res_dir /DATA_10TB/data_rpg/outputs/UnCRtainTS/inference --weight_folder /DATA_10TB/data_rpg/outputs/UnCRtainTS/results/train"
         },
-        {
-            "name": "AFRICA test reconstruct SEN12MSCRTS",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "model/test_reconstruct.py ",
-            "console": "integratedTerminal",
-            "args": "--experiment_name utae --region africa --res_dir /media/DATA/ADeWit/3STR/inference --weight_folder /media/DATA/ADeWit/3STR/models --root2 /media/DATA/ADeWit/3STR/dataset/SEN12MSCRTS"
-        }
     ]
 }

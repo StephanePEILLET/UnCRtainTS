@@ -1,163 +1,111 @@
-"""
-Main script for image reconstruction experiments
-Author: Patrick Ebel (github/PatrickTUM), based on the scripts of
-        Vivien Sainte Fare Garnot (github/VSainteuf)
-License: MIT
-"""
-
-import argparse
-import json
 import os
-import pprint
-import random
 import sys
 import time
-
 import numpy as np
-from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 dirname = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(dirname))
 
 import torch
-import torchnet as tnt
-from parse_args import create_parser
-from model.src.config_utils import print_config_rich
-from omegaconf import OmegaConf
-
-from src import losses, utils
-from src.learning.metrics import avg_img_metrics, img_metrics
-from src.learning.weight_init import weight_init
-from src.model_utils import (
-    freeze_layers,
-    get_model,
-    load_checkpoint,
-    load_model,
-    save_model,
-)
-from torch.utils.tensorboard import SummaryWriter
-from data.uncrtaints_adapter import UnCRtainTS_CIRCA_Adapter
-from data.dataLoader import SEN12MSCR, SEN12MSCRTS
-
-import model.train_reconstruct as legacy
+from model.train_reconstruct import recursive_todevice
+from data.utils.process_functions import process_MS
+from data.utils.process_functions import process_SAR
+from data.utils.process_functions import reverse_process_MS
+from model.src.metrics import CloudRemovalDatasetMetrics
 
 S2_BANDS = 10
+MAX_PIXEL_INTENSITY_USED_FOR_REVERSE = 10_000
 
-def iterate_v2(model, data_loader, config, writer, mode="train", epoch=None, device=None):
-
+def iterate_full_sequence(model, data_loader, config, device=None):
+    # Vérification que l'on se trouve bien dans un contexte d'inférence
+    # in_S2 shape BS * T * C * H * W
+    # in_S2_td BS * T
+    # in_m shape BS * T * C * H * W
     if len(data_loader) == 0:
         raise ValueError("Received data loader with zero samples!")
+    assert config.sample_type == "generic"
+    assert data_loader.batch_size == 1, "Full sequence inference only implemented for batch size 1"
 
+    # --- start of epoch ---
     t_start = time.time()
-    for i, batch in enumerate(tqdm(data_loader)): 
-        assert config.sample_type == "generic":
 
-        if config.sample_type == "cloudy_cloudfree":
-            x, y, in_m, dates = legacy.prepare_data(batch, device, config)
-        elif config.sample_type == "pretrain":
-            x, y, in_m = legacy.prepare_data(batch, device, config)
-            dates = None
+    metrics = ["mae", "mse", "rmse", "psnr", "ssim", "r2", "sam"]
+    set_metrics = CloudRemovalDatasetMetrics(
+        metrics=metrics,
+        eval_occluded_observed=True,
+        clean_gt_cloudy_pixels=True,
+        max_pixel_intensity=MAX_PIXEL_INTENSITY_USED_FOR_REVERSE,
+    )
+    input_t = config.input_t    
+    for i, batch in enumerate(tqdm(data_loader)):
+        # in_S2 shape BS * T * C * H * W => [1, T, C, H, W]
+        assert "idx_syn_aleatoire" in batch, "Full sequence inference requires 'idx_syn_aleatoire' in the batch"
+        masks = batch["masks"]
+        idx_syn_masks = (batch["idx_syn_aleatoire"]).squeeze().numpy().tolist()
+        idx_good_frames = batch["idx_good_frames"].squeeze().numpy()
+        idx_valid_obs = torch.from_numpy(np.union1d(idx_good_frames, idx_syn_masks).astype(int))
+        syn_masks = torch.zeros_like(masks)
+        if isinstance(idx_syn_masks, int): # correction si un seul indice afin d'éviter les erreurs lié à array à 0 dimensions
+            idx_syn_masks = [idx_syn_masks]
+
+        if isinstance(idx_syn_masks, list) and len(idx_syn_masks) > 0:
+            for i in idx_syn_masks:
+                syn_masks[:, i, ...] = torch.ones_like(syn_masks[:, i, ...])
         else:
-            raise NotImplementedError
-        inputs = {"A": x, "B": y, "dates": dates, "masks": in_m}
+            syn_masks = torch.zeros_like(masks)
 
-        if mode != "train":  # val or test
+        # Sélection des dates valides (observées ou synthétiques)
+        syn_masks = syn_masks[:, idx_valid_obs, ...]
+        prob_masks = masks[:, idx_valid_obs, ...]
+        data_S2 = batch["S2"][:, idx_valid_obs, ...]
+        raw_S2, in_S2 = data_S2, torch.from_numpy(process_MS(data_S2))
+        if config.use_sar:
+            in_S1 = torch.from_numpy(process_SAR(batch["S1"][:, idx_valid_obs, ...]))
+        data = torch.cat([in_S2, in_S1], dim=2) if config.use_sar else in_S2
+        in_S2_td = torch.tensor(batch["S2 TD"])[idx_valid_obs]
+
+        T = data_S2.shape[1]
+        windows = np.lib.stride_tricks.sliding_window_view(np.arange(T), window_shape=input_t).tolist()
+        idx_targets = [window[len(window) // 2] for window in windows]
+
+        outputs = []
+        for window, idx_target in zip(windows, idx_targets):
+            # in_S2 shape BS * [window] * C * H * W => [1, [window], C, H, W]
+            x = recursive_todevice(data[:, window, ...], device)
+            y = recursive_todevice(in_S2[:, idx_target, ...].unsqueeze(1), device)
+            in_m = recursive_todevice(syn_masks[:, window, ...].swapaxes(0, 1), device)
+            dates = recursive_todevice(in_S2_td[window], device)
+            # Prepare model inputs and forward pass
+            inputs = {"A": x, "B": y, "dates": dates, "masks": in_m}
             with torch.no_grad():
-                # compute single-model mean and variance predictions
                 model.set_input(inputs)
                 model.forward()
                 model.get_loss_G()
                 model.rescale()
                 out = model.fake_B
-                if hasattr(model.netG, "variance") and model.netG.variance is not None:
-                    var = model.netG.variance
-                    model.netG.variance = None
-                else:
-                    var = out[:, :, S2_BANDS:, ...]
                 out = out[:, :, :S2_BANDS, ...]
-                batch_size = y.size()[0]
+                outputs.append(out.cpu())
 
-                for bdx in range(batch_size):
+        outputs = torch.cat(outputs, axis=1)  # Concatenate along time dimension
+        preds = reverse_process_MS(outputs, intensity_min=0, intensity_max=MAX_PIXEL_INTENSITY_USED_FOR_REVERSE) # repass in int16 range
 
-        else:  # training
-           raise NotImplementedError
-        
-        # log the loss, computed via model.backward_G() at train time & via model.get_loss_G() at val/test time
-        loss_meter.add(model.loss_G.item())
-        # after each batch, close any leftover figures
-        plt.close("all")
+        # Recoupage des données pour ne garder que les dates cibles prédites
+        targets = raw_S2[:, idx_targets, ...]
+        syn_masks = syn_masks[:, idx_targets, ...]
+        prob_masks = prob_masks[:, idx_targets, ...]
 
+        set_metrics.update(
+            target=targets,
+            masks=syn_masks,
+            predicted=preds,
+            cloud_masks=prob_masks,
+        )
+    
     # --- end of epoch ---
-    # after each epoch, log the loss metrics
     t_end = time.time()
     total_time = t_end - t_start
     print(f"Epoch time : {total_time:.1f}s")
-    metrics = {f"{mode}_epoch_time": total_time}
-    # log the loss, only computed within model.backward_G() at train time
-    metrics[f"{mode}_loss"] = loss_meter.value()[0]
 
-    if mode in {"test", "val"}:
-        # log the metrics
+    return set_metrics.compute()
 
-        # log image metrics
-        for key, val in img_meter.value().items():
-            writer.add_scalar(f"{mode}/{key}", val, step)
-
-        # any loss is currently only computed within model.backward_G() at train time
-        writer.add_scalar(f"{mode}/loss", metrics[f"{mode}_loss"], step)
-
-        # use add_images for batch-wise adding across temporal dimension
-        if config.use_sar:
-            writer.add_image(
-                f"Img/{mode}/in_s1", x[0, :, [0], ...], step, dataformats="NCHW"
-            )
-            writer.add_image(
-                f"Img/{mode}/in_s2", x[0, :, [5, 4, 3], ...], step, dataformats="NCHW"
-            )
-        else:
-            writer.add_image(
-                f"Img/{mode}/in_s2", x[0, :, [3, 2, 1], ...], step, dataformats="NCHW"
-            )
-        writer.add_image(
-            f"Img/{mode}/out", out[0, 0, [3, 2, 1], ...], step, dataformats="CHW"
-        )
-        writer.add_image(
-            f"Img/{mode}/y", y[0, 0, [3, 2, 1], ...], step, dataformats="CHW"
-        )
-        writer.add_image(
-            f"Img/{mode}/m", in_m[0, :, None, ...], step, dataformats="NCHW"
-        )
-
-        # compute Expected Calibration Error (ECE)
-        if config.loss in ["GNLL", "MGNLL"]:
-            sorted_errors_se = legacy.compute_ece(
-                vars_aleatoric, errs_se, len(data_loader.dataset), percent=5
-            )
-            sorted_errors = {"se_sortAleatoric": sorted_errors_se}
-            legacy.plot_discard(
-                writer, sorted_errors["se_sortAleatoric"], config, mode, step, is_se=True
-            )
-
-            # compute ECE
-            uce_l2, auce_l2 = legacy.compute_uce_auce(
-                writer,
-                vars_aleatoric,
-                errs,
-                len(data_loader.dataset),
-                percent=5,
-                l2=True,
-                mode=mode,
-                step=step,
-            )
-
-            # no need for a running mean here
-            img_meter.value()["UCE SE"] = uce_l2.cpu().numpy().item()
-            img_meter.value()["AUCE SE"] = auce_l2.cpu().numpy().item()
-
-        if config.loss in ["GNLL", "MGNLL"]:
-            legacy.log_aleatoric(writer, config, mode, step, var, "model/", img_meter)
-
-        return metrics, img_meter.value()
-    else:
-        return metrics

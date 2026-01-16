@@ -1,0 +1,12 @@
+experiment_name: UnCRtainTS_bs_7_MGNLL_experiment
+res_dir: /DATA_10TB/data_rpg/outputs/UnCRtainTS/inference
+weight_folder: /DATA_10TB/data_rpg/outputs/UnCRtainTS/results/train
+hdf5_file: /DATA_10TB/data_rpg/circa/hdf5/CIRCA_CR_merged.hdf5
+input_t: 3
+sample_type: generic
+sampler: fixed
+use_sar: mix_closest
+channels: all
+shuffle: False
+num_workers: 1
+batch_size: 1

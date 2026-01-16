@@ -1,4 +1,5 @@
 {
+    "config_file": "/home/SPeillet/cloud_reconstruction/UnCRtainTS_pl/configs/test_CIRCA.yaml",
     "model": "uncrtaints",
     "experiment_name": "my_first_experiment",
     "res_dir": "./inference",
@@ -16,7 +17,7 @@
         128
     ],
     "out_conv": [
-        13
+        10
     ],
     "mean_nonLinearity": true,
     "var_nonLinearity": "softplus",
@@ -69,5 +70,5 @@
     "weight_folder": "./results",
     "use_custom": false,
     "load_config": "",
-    "pid": 331187
+    "pid": 3343124
 }
