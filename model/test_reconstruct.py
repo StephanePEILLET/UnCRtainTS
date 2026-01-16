@@ -89,22 +89,13 @@ else:
     config = test_config  # otherwise, keep passed flags without any overwriting
 config = utils.str2list(config, ["encoder_widths", "decoder_widths", "out_conv"])
 
-experime_dir = os.path.join(config.res_dir, config.experiment_name)
-if not os.path.exists(experime_dir):
-    os.makedirs(experime_dir)
-with open(os.path.join(experime_dir, "conf.json"), "w") as file:
-    file.write(json.dumps(vars(config), indent=4))
-
 # seed everything
 seed_packages(config.rdm_seed)
 # instantiate tensorboard logger
-writer = SummaryWriter(os.path.join(config.res_dir, config.experiment_name))
-
 
 def main(config):
     device = torch.device(config.device)
     config.use_sar = True
-    prepare_output(config)
 
     model = get_model(config)
     model = model.to(device)
@@ -113,6 +104,12 @@ def main(config):
 
     if params_conf_file is not None:
         config.__dict__.update(params_conf_file)
+    prepare_output(config)
+    experiment_dir = os.path.join(config.res_dir, config.experiment_name)
+    if not os.path.exists(experiment_dir):
+        os.makedirs(experiment_dir)
+    with open(os.path.join(experiment_dir, "conf.json"), "w") as file:
+        file.write(json.dumps(vars(config), indent=4))
 
     S1_LAUNCH: str = "2014-04-03"
     CLEAR_THRESHOLD: float = 1e-3  # Threshold for considering a scene as cloud-free
