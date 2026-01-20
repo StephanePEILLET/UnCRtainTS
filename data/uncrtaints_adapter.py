@@ -187,15 +187,6 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
         dates_S2: List = patch_data["S2"]["S2_dates"]
         s2_td: List[int] = [(d - self.ref_date).days for d in dates_S2]
 
-        # Process cloud masks
-        masks: NDArray
-        if self.compute_cloud_mask:
-            masks = np.asarray([get_cloud_map(img, self.cloud_masks, self.cloud_detector) for img in s2])
-        else:
-            masks = patch_data["S2"]["cloud_prob"][patch_data["idx_good_frames"]]
-
-        coverage: List[float] = masks.mean(dim=(1, 2, 3)).tolist()
-
         if self.use_sar:
             # Extract SAR data and dates
             s1: NDArray = patch_data["S1"]["S1"]  # T * C * H * W
@@ -223,6 +214,7 @@ class UnCRtainTS_CIRCA_Adapter(CIRCA_from_HDF5):
 
         elif self.sample_type == "cloudy_cloudfree":
             masks = patch_data["S2"]["cloud_prob"][patch_data["idx_good_frames"]]
+            coverage: List[float] = masks.mean(dim=(1, 2, 3)).tolist()
             s2 = np.asarray([process_MS(img, self.method) for img in s2])
             # Sample cloud-free and cloudy dates
             inputs_idx: NDArray

@@ -11,9 +11,9 @@ Revoir les shapes dans le cas du training
 - [X] 🔪 Mieux découper la fonction `iterate` de base afin d'éviter qu'il y ait trop d'erreurs ou de dépendances ?
 - [X] 🔄 Modifier la fonction `iterate` afin de pouvoir retourner toutes les inférences d'une TS :
     - [X] 📦 Reprendre la classe Imputation d'U-TILISE
-    - [ ] 1️⃣ Faire en sorte de ne sortir qu'une inférence de l'imputation (cas nominal)
+    - [X] 1️⃣ Faire en sorte de ne sortir qu'une inférence de l'imputation (cas nominal)
     - [X] 🚧 Modifier le code afin de prévoir l'utilisation du modèle sur les bords de la TS
-    - [ ] 📏 Adapter le code des métriques afin de pouvoir les calculer sur une/plusieurs dates de la TS
+    - [X] 📏 Adapter le code des métriques afin de pouvoir les calculer sur une/plusieurs dates de la TS
 
 ## 💾 Code class `dataloader`
 - [x] 👁️ Faire une passe sur le code pour mieux comprendre le fonctionnement du chargement des données
@@ -23,5 +23,9 @@ Revoir les shapes dans le cas du training
 - [X] 🎭 Faire en sorte d'avoir les masques de données pour les tests sets aléatoires et consécutifs
 
 ## 🚀 Amélioration Training
-- [ ] 🎭 Induire du masquage dans la série temporelle (à place du skip de date?)
 - [X] 📉 Changer le val pour avoir une variation dans la sélection des obs de val
+
+
+Faire les inférences pour Michael
+
+Avancer sur la rédaction
